@@ -12,6 +12,7 @@ interface AuthContextValue {
   error: string | null
   refresh: () => Promise<void>
 }
+
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -20,51 +21,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const generation = useRef(0)
+  const mounted = useRef(true)
 
-  const load = useCallback(async (currentSession: Session | null) => {
+  const load = useCallback(async (nextSession: Session | null) => {
     const run = ++generation.current
-    setSession(currentSession)
+
+    if (!mounted.current) return
+
+    setSession(nextSession)
     setError(null)
-    if (!currentSession) {
+
+    if (!nextSession) {
       setContext(null)
       setLoading(false)
       return
     }
+
     setLoading(true)
+
     try {
-      const nextContext = await api.getContext(currentSession.user.id)
-      if (run !== generation.current) return
+      const nextContext = await api.getContext(nextSession.user.id)
+      if (!mounted.current || run !== generation.current) return
       setContext(nextContext)
     } catch (cause) {
-      if (run !== generation.current) return
+      if (!mounted.current || run !== generation.current) return
       setContext(null)
-      setError(cause instanceof Error ? cause.message : '사용자 정보를 불러오지 못했습니다.')
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : '사용자 정보를 불러오지 못했습니다.',
+      )
     } finally {
-      if (run === generation.current) setLoading(false)
+      if (mounted.current && run === generation.current) {
+        setLoading(false)
+      }
     }
   }, [])
 
   useEffect(() => {
-    let active = true
-    void supabase.auth.getSession().then(({ data }) => {
-      if (active) void load(data.session)
+    mounted.current = true
+
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      void load(nextSession)
     })
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      if (active) void load(nextSession)
+
+    void supabase.auth.getSession().then(({ data: sessionData, error: sessionError }) => {
+      if (!mounted.current) return
+      if (sessionError) {
+        setError(sessionError.message)
+        setLoading(false)
+        return
+      }
+      void load(sessionData.session)
     })
+
     return () => {
-      active = false
+      mounted.current = false
       generation.current += 1
-      listener.subscription.unsubscribe()
+      data.subscription.unsubscribe()
     }
   }, [load])
 
   const refresh = useCallback(async () => {
-    const { data } = await supabase.auth.getSession()
+    const { data, error: sessionError } = await supabase.auth.getSession()
+    if (sessionError) throw sessionError
     await load(data.session)
   }, [load])
 
-  const value = useMemo(() => ({ session, context, loading, error, refresh }), [session, context, loading, error, refresh])
+  const value = useMemo(
+    () => ({ session, context, loading, error, refresh }),
+    [session, context, loading, error, refresh],
+  )
+
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
