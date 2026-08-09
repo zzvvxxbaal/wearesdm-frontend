@@ -29,36 +29,59 @@ import type {
   PrayerRequest,
 } from '../../types/domain'
 
-type PrayerRequestView =
-  PrayerRequest & {
-    reacted_by_me?: boolean
-    reaction_count?: number
-    visible_author_name?:
-      | string
-      | null
-    is_anonymous?: boolean
-    visibility?:
-      | 'public'
-      | 'private'
-    title?: string | null
-    body?: string
-    created_at: string
-  }
+type PrayerView = PrayerRequest & {
+  reacted_by_me?: boolean
+  reaction_count?: number
+  visible_author_name?: string | null
+  is_anonymous?: boolean
+  visibility?: 'public' | 'private'
+  title?: string | null
+  body?: string
+  created_at: string
+}
 
-type PrayerCreateInput = {
+type PrayerCreateValue = {
   title: string
   body: string
-  visibility:
-    | 'public'
-    | 'private'
+  visibility: 'public' | 'private'
   is_anonymous: boolean
   organization_id: string
   author_id: string
   status: 'published'
 }
 
-type MediaFormValue =
-  Partial<MediaItem>
+/*
+ * IMPORTANT:
+ *
+ * MediaFormValue must NOT use `type: string`.
+ *
+ * It is intentionally derived from MediaItem so that the
+ * value passed to api.media.create/update is compatible
+ * with the actual domain type.
+ */
+type MediaFormValue = Omit<
+  Partial<MediaItem>,
+  'type'
+> & {
+  type?: MediaItem['type']
+}
+
+/*
+ * Converts the editable form value into the exact
+ * Partial<MediaItem> expected by the API.
+ *
+ * Keeping this conversion in one place prevents
+ * MediaFormValue from accidentally widening `type`
+ * back to string.
+ */
+function toMediaItemInput(
+  value: MediaFormValue,
+): Partial<MediaItem> {
+  return {
+    ...value,
+    type: value.type,
+  }
+}
 
 export function PrayerPage() {
   const { context } = useAuth()
@@ -68,8 +91,7 @@ export function PrayerPage() {
   const activeMemberships =
     authContext?.memberships.filter(
       (membership) =>
-        membership.status ===
-        'active',
+        membership.status === 'active',
     ) ?? []
 
   const organizations =
@@ -82,20 +104,14 @@ export function PrayerPage() {
         ),
     ) ?? []
 
-  const [
-    orgId,
-    setOrgId,
-  ] = useState('')
+  const [orgId, setOrgId] =
+    useState('')
 
-  const [
-    create,
-    setCreate,
-  ] = useState(false)
+  const [create, setCreate] =
+    useState(false)
 
-  const [
-    error,
-    setError,
-  ] = useState('')
+  const [error, setError] =
+    useState('')
 
   const qc = useQueryClient()
 
@@ -107,9 +123,7 @@ export function PrayerPage() {
   const {
     data = [],
     isLoading,
-  } = useQuery<
-    PrayerRequestView[]
-  >({
+  } = useQuery<PrayerView[]>({
     queryKey: [
       'prayers',
       effectiveOrgId,
@@ -125,7 +139,7 @@ export function PrayerPage() {
           effectiveOrgId,
         )
 
-      return result as PrayerRequestView[]
+      return result as PrayerView[]
     },
 
     enabled:
@@ -136,9 +150,6 @@ export function PrayerPage() {
   if (!authContext?.profile) {
     return <Spinner />
   }
-
-  const userId =
-    authContext.profile.id
 
   if (!effectiveOrgId) {
     return (
@@ -210,7 +221,9 @@ export function PrayerPage() {
             <PrayerCard
               key={prayer.id}
               prayer={prayer}
-              userId={userId}
+              userId={
+                authContext.profile.id
+              }
               onError={setError}
             />
           ))}
@@ -229,7 +242,9 @@ export function PrayerPage() {
           organizationId={
             effectiveOrgId
           }
-          userId={userId}
+          userId={
+            authContext.profile.id
+          }
           onClose={() =>
             setCreate(false)
           }
@@ -257,7 +272,7 @@ function PrayerCard({
   userId,
   onError,
 }: {
-  prayer: PrayerRequestView
+  prayer: PrayerView
   userId: string
   onError: (
     message: string,
@@ -267,16 +282,14 @@ function PrayerCard({
     reacted,
     setReacted,
   ] = useState(
-    prayer.reacted_by_me ??
-      false,
+    prayer.reacted_by_me ?? false,
   )
 
   const [
     count,
     setCount,
   ] = useState(
-    prayer.reaction_count ??
-      0,
+    prayer.reaction_count ?? 0,
   )
 
   const [
@@ -298,9 +311,7 @@ function PrayerCard({
         reacted,
       )
 
-      setReacted(
-        !reacted,
-      )
+      setReacted(!reacted)
 
       setCount(
         (current) =>
@@ -309,9 +320,7 @@ function PrayerCard({
       )
     } catch (error) {
       onError(
-        getErrorMessage(
-          error,
-        ),
+        getErrorMessage(error),
       )
     } finally {
       setBusy(false)
@@ -389,16 +398,17 @@ function PrayerModal({
   const [
     value,
     setValue,
-  ] = useState<PrayerCreateInput>({
-    title: '',
-    body: '',
-    visibility: 'public',
-    is_anonymous: false,
-    organization_id:
-      organizationId,
-    author_id: userId,
-    status: 'published',
-  })
+  ] =
+    useState<PrayerCreateValue>({
+      title: '',
+      body: '',
+      visibility: 'public',
+      is_anonymous: false,
+      organization_id:
+        organizationId,
+      author_id: userId,
+      status: 'published',
+    })
 
   return (
     <Modal
@@ -420,9 +430,7 @@ function PrayerModal({
             await onDone()
           } catch (error) {
             onError(
-              getErrorMessage(
-                error,
-              ),
+              getErrorMessage(error),
             )
           }
         }}
@@ -471,8 +479,7 @@ function PrayerModal({
                   (current) => ({
                     ...current,
                     visibility:
-                      event.target
-                        .value ===
+                      event.target.value ===
                       'private'
                         ? 'private'
                         : 'public',
@@ -500,8 +507,7 @@ function PrayerModal({
                   (current) => ({
                     ...current,
                     is_anonymous:
-                      event.target
-                        .value ===
+                      event.target.value ===
                       'true',
                   }),
                 )
@@ -539,10 +545,8 @@ function PrayerModal({
 export function MediaPage() {
   const { context } = useAuth()
 
-  const [
-    orgId,
-    setOrgId,
-  ] = useState('all')
+  const [orgId, setOrgId] =
+    useState('all')
 
   const [
     editing,
@@ -552,10 +556,8 @@ export function MediaPage() {
       null,
     )
 
-  const [
-    error,
-    setError,
-  ] = useState('')
+  const [error, setError] =
+    useState('')
 
   const qc = useQueryClient()
 
@@ -600,14 +602,25 @@ export function MediaPage() {
     value: MediaFormValue,
   ) => {
     try {
+      /*
+       * The important part:
+       *
+       * `toMediaItemInput` returns
+       * Partial<MediaItem>, so the
+       * create/update functions receive
+       * exactly the type they expect.
+       */
+      const input =
+        toMediaItemInput(value)
+
       if (value.id) {
         await api.media.update(
           value.id,
-          value,
+          input,
         )
       } else {
         await api.media.create(
-          value,
+          input,
         )
       }
 
@@ -620,9 +633,7 @@ export function MediaPage() {
       setEditing(null)
     } catch (error) {
       setError(
-        getErrorMessage(
-          error,
-        ),
+        getErrorMessage(error),
       )
     }
   }
@@ -698,126 +709,105 @@ export function MediaPage() {
         <Spinner />
       ) : data.length > 0 ? (
         <div className="grid-3">
-          {data.map((media) => (
-            <Card key={media.id}>
-              <Badge>
-                {media.type}
-              </Badge>
+          {data.map((media) => {
+            const canManage =
+              isAdmin(context) ||
+              (!!media.organization_id &&
+                canPermission(
+                  context,
+                  'media.manage',
+                  media.organization_id,
+                ))
 
-              <h2>
-                {media.title}
-              </h2>
+            return (
+              <Card key={media.id}>
+                <Badge>
+                  {media.type}
+                </Badge>
 
-              <p>
-                {media.description ||
-                  ''}
-              </p>
+                <h2>
+                  {media.title}
+                </h2>
 
-              {media.external_url && (
-                <a
-                  href={
-                    media.external_url
-                  }
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-link"
-                >
-                  열기 ↗
-                </a>
-              )}
-
-              {media.storage_path && (
-                <p className="muted">
-                  스토리지:{' '}
-                  {
-                    media.storage_path
-                  }
+                <p>
+                  {media.description ||
+                    ''}
                 </p>
-              )}
 
-              {(isAdmin(context) ||
-                (media.organization_id &&
-                  canPermission(
-                    context,
-                    'media.manage',
-                    media.organization_id,
-                  ))) && (
-                <div className="actions">
-                  <Button
-                    variant="secondary"
-                    onClick={() =>
-                      setEditing({
-                        id: media.id,
-                        organization_id:
-                          media.organization_id,
-                        type:
-                          media.type,
-                        title:
-                          media.title,
-                        description:
-                          media.description,
-                        storage_bucket:
-                          media.storage_bucket,
-                        storage_path:
-                          media.storage_path,
-                        external_url:
-                          media.external_url,
-                        mime_type:
-                          media.mime_type,
-                        file_size_bytes:
-                          media.file_size_bytes,
-                        duration_seconds:
-                          media.duration_seconds,
-                        thumbnail_path:
-                          media.thumbnail_path,
-                        status:
-                          media.status,
-                        uploaded_by:
-                          media.uploaded_by,
-                      })
+                {media.external_url && (
+                  <a
+                    href={
+                      media.external_url
                     }
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-link"
                   >
-                    수정
-                  </Button>
+                    열기 ↗
+                  </a>
+                )}
 
-                  <Button
-                    variant="danger"
-                    onClick={async () => {
-                      if (
-                        !confirm(
-                          '삭제할까요?',
-                        )
-                      ) {
-                        return
+                {media.storage_path && (
+                  <p className="muted">
+                    스토리지:{' '}
+                    {
+                      media.storage_path
+                    }
+                  </p>
+                )}
+
+                {canManage && (
+                  <div className="actions">
+                    <Button
+                      variant="secondary"
+                      onClick={() =>
+                        setEditing({
+                          ...media,
+                        })
                       }
+                    >
+                      수정
+                    </Button>
 
-                      try {
-                        await api.media.delete(
-                          media.id,
-                        )
+                    <Button
+                      variant="danger"
+                      onClick={async () => {
+                        if (
+                          !confirm(
+                            '삭제할까요?',
+                          )
+                        ) {
+                          return
+                        }
 
-                        await qc.invalidateQueries(
-                          {
-                            queryKey: [
-                              'media',
-                            ],
-                          },
-                        )
-                      } catch (error) {
-                        setError(
-                          getErrorMessage(
-                            error,
-                          ),
-                        )
-                      }
-                    }}
-                  >
-                    삭제
-                  </Button>
-                </div>
-              )}
-            </Card>
-          ))}
+                        try {
+                          await api.media.delete(
+                            media.id,
+                          )
+
+                          await qc.invalidateQueries(
+                            {
+                              queryKey: [
+                                'media',
+                              ],
+                            },
+                          )
+                        } catch (error) {
+                          setError(
+                            getErrorMessage(
+                              error,
+                            ),
+                          )
+                        }
+                      }}
+                    >
+                      삭제
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            )
+          })}
         </div>
       ) : (
         <Card>
@@ -862,9 +852,10 @@ function MediaModal({
   const [
     state,
     setState,
-  ] = useState<MediaFormValue>(
-    value,
-  )
+  ] =
+    useState<MediaFormValue>(
+      value,
+    )
 
   return (
     <Modal
@@ -922,15 +913,18 @@ function MediaModal({
             value={
               state.type ?? ''
             }
-            onChange={(event) =>
+            onChange={(event) => {
+              const nextType =
+                event.target
+                  .value as MediaItem['type']
+
               setState(
                 (current) => ({
                   ...current,
-                  type:
-                    event.target.value as MediaItem['type'],
+                  type: nextType,
                 }),
               )
-            }
+            }}
           >
             <option value="photo">
               이미지
