@@ -25,8 +25,14 @@ import {
 import { formatDateTime } from '../../lib/format'
 import { getErrorMessage } from '../../lib/errors'
 import type {
+  ContentStatus,
+  MediaItem,
+  MediaType,
   PrayerRequest,
 } from '../../types/domain'
+import type {
+  MediaCreateInput,
+} from '../../types/media'
 
 type PrayerView = PrayerRequest & {
   reacted_by_me?: boolean
@@ -50,80 +56,28 @@ type PrayerCreateValue = {
 }
 
 /*
- * Media types are derived directly from the API.
+ * MediaFormValue is a UI-only type.
  *
- * Do not import MediaItem from domain.ts here.
+ * It is intentionally NOT derived from Partial<MediaItem>.
  *
- * The previous implementation used:
- *
- *   Partial<MediaItem>
- *
- * from ../../types/domain.
- *
- * The API media methods use their own MediaItem type,
- * which caused two different MediaType definitions to
- * become incompatible even though they had the same name.
- *
- * By deriving the form type from api.media.create,
- * the form and API now use exactly the same type.
+ * MediaItem represents a row returned from the database,
+ * while this type represents the values entered in the form.
  */
-type MediaCreateInput =
-  Parameters<
-    typeof api.media.create
-  >[0]
-
-type MediaUpdateInput =
-  Parameters<
-    typeof api.media.update
-  >[1]
+type MediaFormValue = {
+  id?: string
+  organization_id: string
+  type: MediaType
+  title: string
+  description: string
+  external_url: string
+  status: ContentStatus
+}
 
 /*
- * The media list item is derived from the actual API
- * response rather than from a separately imported
- * domain MediaItem.
- */
-type MediaListResult =
-  Awaited<
-    ReturnType<typeof api.media.list>
-  >
-
-type MediaItem =
-  MediaListResult extends Array<
-    infer Item
-  >
-    ? Item
-    : never
-
-/*
- * The form uses the exact create-input type used
- * by api.media.create.
+ * Convert a database/API media item into the UI form shape.
  *
- * `id` is added because an existing media item is
- * edited through the same form.
- */
-type MediaFormValue =
-  MediaCreateInput & {
-    id?: string
-  }
-
-/*
- * The media type used by the API create input.
- *
- * This is intentionally derived from the API instead
- * of being recreated locally.
- */
-type MediaType =
-  NonNullable<
-    MediaCreateInput['type']
-  >
-
-/*
- * Convert an existing API media item into the form
- * shape explicitly.
- *
- * We do not spread the entire domain object into the
- * form because that can reintroduce incompatible
- * properties from another type declaration.
+ * Nullable database values are converted into empty strings
+ * because the form controls work with strings.
  */
 function mediaItemToFormValue(
   media: MediaItem,
@@ -131,9 +85,9 @@ function mediaItemToFormValue(
   return {
     id: media.id,
     organization_id:
-      media.organization_id,
-    type: media.type as MediaType,
-    title: media.title ?? '',
+      media.organization_id ?? '',
+    type: media.type,
+    title: media.title,
     description:
       media.description ?? '',
     external_url:
@@ -143,32 +97,27 @@ function mediaItemToFormValue(
 }
 
 /*
- * Convert the form into the exact input type required
- * by api.media.create / api.media.update.
+ * Convert the UI form into the exact API create payload.
  *
- * The return type is deliberately tied to the API
- * parameter type.
+ * This is the only conversion between the form layer and
+ * the API layer.
+ *
+ * It does NOT use Partial<MediaItem>.
  */
 function toMediaCreateInput(
   value: MediaFormValue,
 ): MediaCreateInput {
-  const {
-    id: _id,
-    ...input
-  } = value
-
-  return input
-}
-
-function toMediaUpdateInput(
-  value: MediaFormValue,
-): MediaUpdateInput {
-  const {
-    id: _id,
-    ...input
-  } = value
-
-  return input as MediaUpdateInput
+  return {
+    organization_id:
+      value.organization_id,
+    type: value.type,
+    title: value.title,
+    description:
+      value.description,
+    external_url:
+      value.external_url,
+    status: value.status,
+  }
 }
 
 export function PrayerPage() {
@@ -179,7 +128,8 @@ export function PrayerPage() {
   const activeMemberships =
     authContext?.memberships.filter(
       (membership) =>
-        membership.status === 'active',
+        membership.status ===
+        'active',
     ) ?? []
 
   const organizations =
@@ -236,8 +186,8 @@ export function PrayerPage() {
   })
 
   /*
-   * TypeScript narrowing is performed before any
-   * callback uses the profile.
+   * Narrow profile before using it in callbacks
+   * or JSX below this point.
    */
   if (!authContext?.profile) {
     return <Spinner />
@@ -693,24 +643,17 @@ export function MediaPage() {
     value: MediaFormValue,
   ) => {
     try {
-      if (value.id) {
-        const input =
-          toMediaUpdateInput(
-            value,
-          )
+      const payload =
+        toMediaCreateInput(value)
 
+      if (value.id) {
         await api.media.update(
           value.id,
-          input,
+          payload,
         )
       } else {
-        const input =
-          toMediaCreateInput(
-            value,
-          )
-
         await api.media.create(
-          input,
+          payload,
         )
       }
 
@@ -747,8 +690,7 @@ export function MediaPage() {
               setEditing({
                 organization_id:
                   manageable[0].id,
-                type:
-                  'document' as MediaType,
+                type: 'document',
                 title: '',
                 description: '',
                 external_url: '',
@@ -970,8 +912,7 @@ function MediaModal({
         <Field label="조직">
           <Select
             value={
-              state.organization_id ??
-              ''
+              state.organization_id
             }
             onChange={(event) =>
               setState(
@@ -1003,9 +944,7 @@ function MediaModal({
 
         <Field label="유형">
           <Select
-            value={
-              state.type ?? ''
-            }
+            value={state.type}
             onChange={(event) => {
               const nextType =
                 event.target
@@ -1039,9 +978,7 @@ function MediaModal({
 
         <Field label="제목">
           <Input
-            value={
-              state.title ?? ''
-            }
+            value={state.title}
             onChange={(event) =>
               setState(
                 (current) => ({
@@ -1058,8 +995,7 @@ function MediaModal({
         <Field label="설명">
           <Textarea
             value={
-              state.description ??
-              ''
+              state.description
             }
             onChange={(event) =>
               setState(
@@ -1076,8 +1012,7 @@ function MediaModal({
         <Field label="외부 URL">
           <Input
             value={
-              state.external_url ??
-              ''
+              state.external_url
             }
             onChange={(event) =>
               setState(
@@ -1094,16 +1029,13 @@ function MediaModal({
 
         <Field label="상태">
           <Select
-            value={
-              state.status ??
-              'published'
-            }
+            value={state.status}
             onChange={(event) =>
               setState(
                 (current) => ({
                   ...current,
                   status:
-                    event.target.value as MediaCreateInput['status'],
+                    event.target.value as ContentStatus,
                 }),
               )
             }
