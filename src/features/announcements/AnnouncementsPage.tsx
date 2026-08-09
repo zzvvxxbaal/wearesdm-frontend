@@ -1,1 +1,21 @@
+import { FormEvent,useState } from 'react'
+import { useQuery,useQueryClient } from '@tanstack/react-query'
+import { api } from '../../services/api'
+import { useAuth } from '../../app/AuthProvider'
+import { canPermission,isAdmin } from '../../lib/permissions'
+import { Button,Card,Empty,ErrorBox,Field,Input,Modal,Select,Spinner,Textarea,Badge } from '../../components/ui'
+import { contentStatusLabel,formatDateTime } from '../../lib/format'
+import { getErrorMessage } from '../../lib/errors'
 
+export function AnnouncementsPage(){
+ const {context}=useAuth();const qc=useQueryClient();const [orgId,setOrgId]=useState('all');const [editing,setEditing]=useState<any>(null);const [error,setError]=useState('')
+ const {data=[],isLoading}=useQuery({queryKey:['announcements',orgId],queryFn:()=>api.announcements.list(orgId==='all'?undefined:orgId),enabled:!!context})
+ const manageable=(context?.organizations??[]).filter(o=>isAdmin(context)||canPermission(context,'announcement.manage',o.id))
+ const save=async(values:any)=>{try{if(values.id)await api.announcements.update(values.id,values);else await api.announcements.create(values);await qc.invalidateQueries({queryKey:['announcements']});setEditing(null)}catch(e){setError(getErrorMessage(e))}}
+ const del=async(id:string)=>{if(!confirm('이 공지를 삭제할까요?'))return;try{await api.announcements.delete(id);await qc.invalidateQueries({queryKey:['announcements']})}catch(e){setError(getErrorMessage(e))}}
+ return <div className="stack-lg"><div className="page-header"><div><h1>공지사항</h1><p>내가 볼 수 있는 공지와 관리 가능한 공지를 확인합니다.</p></div><div className="actions">{manageable.length>0&&<Button onClick={()=>setEditing({organization_id:manageable[0].id,title:'',body:'',status:'published',is_pinned:false,publish_at:null,expire_at:null})}>공지 작성</Button>}</div></div>
+ {error&&<ErrorBox message={error}/>}<Card><Field label="조직 필터"><Select value={orgId} onChange={e=>setOrgId(e.target.value)}><option value="all">전체</option>{context?.organizations.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</Select></Field></Card>
+ {isLoading?<Spinner/>:data.length?<div className="stack">{data.map(a=><Card key={a.id}><div className="article-head"><div><div className="badges">{a.is_pinned&&<Badge tone="warning">고정</Badge>}<Badge tone={a.status==='published'?'success':'neutral'}>{contentStatusLabel(a.status)}</Badge></div><h2>{a.title}</h2><small>{formatDateTime(a.publish_at||a.created_at)}</small></div>{(isAdmin(context)||(a.organization_id&&canPermission(context,'announcement.manage',a.organization_id)))&&<div className="actions"><Button variant="secondary" onClick={()=>setEditing(a)}>수정</Button><Button variant="danger" onClick={()=>del(a.id)}>삭제</Button></div>}</div><p className="article-body">{a.body}</p></Card>)}</div>:<Card><Empty>게시된 공지가 없습니다.</Empty></Card>}
+ {editing&&<AnnouncementModal value={editing} organizations={manageable} onClose={()=>setEditing(null)} onSave={save}/>}</div>
+}
+function AnnouncementModal({value,organizations,onClose,onSave}:{value:any;organizations:any[];onClose:()=>void;onSave:(v:any)=>Promise<void>}){const [v,setV]=useState(value);const submit=(e:FormEvent)=>{e.preventDefault();void onSave(v)};return <Modal title={v.id?'공지 수정':'공지 작성'} onClose={onClose}><form onSubmit={submit} className="stack"><Field label="조직"><Select value={v.organization_id||''} onChange={e=>setV({...v,organization_id:e.target.value})} required>{organizations.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</Select></Field><Field label="제목"><Input value={v.title} maxLength={200} onChange={e=>setV({...v,title:e.target.value})} required/></Field><Field label="내용"><Textarea rows={8} value={v.body} onChange={e=>setV({...v,body:e.target.value})} required/></Field><div className="form-grid"><Field label="상태"><Select value={v.status} onChange={e=>setV({...v,status:e.target.value})}><option value="draft">임시저장</option><option value="published">게시</option><option value="archived">보관</option></Select></Field><Field label="고정"><Select value={String(v.is_pinned)} onChange={e=>setV({...v,is_pinned:e.target.value==='true'})}><option value="false">아니오</option><option value="true">예</option></Select></Field></div><div className="modal-actions"><Button type="button" variant="secondary" onClick={onClose}>취소</Button><Button>저장</Button></div></form></Modal>}
