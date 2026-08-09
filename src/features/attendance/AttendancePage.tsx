@@ -50,8 +50,7 @@ export function AttendancePage() {
     isLoading,
   } = useQuery({
     queryKey: ['attendance'],
-    queryFn:
-      api.attendance.list,
+    queryFn: () => api.attendance.list(),
     enabled: canRead,
   })
 
@@ -62,8 +61,7 @@ export function AttendancePage() {
     queryKey: [
       'attendance-requests',
     ],
-    queryFn:
-      api.attendance.requests,
+    queryFn: () => api.attendance.requests(),
     enabled: canRead,
   })
 
