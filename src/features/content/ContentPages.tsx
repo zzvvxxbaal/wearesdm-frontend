@@ -51,37 +51,13 @@ type PrayerCreateValue = {
 }
 
 /*
- * IMPORTANT:
+ * Media form state uses the exact same type
+ * expected by api.media.create/update.
  *
- * MediaFormValue must NOT use `type: string`.
- *
- * It is intentionally derived from MediaItem so that the
- * value passed to api.media.create/update is compatible
- * with the actual domain type.
+ * This intentionally avoids defining a second
+ * MediaType or a separate string-based form type.
  */
-type MediaFormValue = Omit<
-  Partial<MediaItem>,
-  'type'
-> & {
-  type?: MediaItem['type']
-}
-
-/*
- * Converts the editable form value into the exact
- * Partial<MediaItem> expected by the API.
- *
- * Keeping this conversion in one place prevents
- * MediaFormValue from accidentally widening `type`
- * back to string.
- */
-function toMediaItemInput(
-  value: MediaFormValue,
-): Partial<MediaItem> {
-  return {
-    ...value,
-    type: value.type,
-  }
-}
+type MediaFormValue = Partial<MediaItem>
 
 export function PrayerPage() {
   const { context } = useAuth()
@@ -603,24 +579,20 @@ export function MediaPage() {
   ) => {
     try {
       /*
-       * The important part:
+       * MediaFormValue is exactly
+       * Partial<MediaItem>.
        *
-       * `toMediaItemInput` returns
-       * Partial<MediaItem>, so the
-       * create/update functions receive
-       * exactly the type they expect.
+       * Therefore the API receives
+       * exactly the type it declares.
        */
-      const input =
-        toMediaItemInput(value)
-
       if (value.id) {
         await api.media.update(
           value.id,
-          input,
+          value,
         )
       } else {
         await api.media.create(
-          input,
+          value,
         )
       }
 
