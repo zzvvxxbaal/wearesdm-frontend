@@ -30,13 +30,13 @@ export function AdminPage() {
     isLoading,
   } = useQuery({
     queryKey: ['all-role-assignments'],
-    queryFn: api.roles.assignments,
+    queryFn: () => api.roles.assignments(),
     enabled: !!context,
   })
 
   const { data: audit = [] } = useQuery({
     queryKey: ['audit'],
-    queryFn: api.audit.list,
+    queryFn: () => api.audit.list(),
     enabled: !!context,
   })
 
@@ -45,7 +45,7 @@ export function AdminPage() {
     isLoading: settingsLoading,
   } = useQuery({
     queryKey: ['notification-settings'],
-    queryFn: api.notificationSettings.list,
+    queryFn: () => api.notificationSettings.list(),
     enabled:
       !!context && tab === 'notifications',
   })
