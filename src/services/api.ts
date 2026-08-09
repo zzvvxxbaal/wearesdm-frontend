@@ -53,21 +53,15 @@ async function select<T>(
   table: TableName,
   query?: (builder: any) => any,
 ): Promise<T[]> {
-  let builder = supabase
-    .from(table)
-    .select('*')
+  let builder = supabase.from(table).select('*')
 
   if (query) {
     builder = query(builder)
   }
 
-  const { data, error } =
-    await builder
+  const { data, error } = await builder
 
-  if (error) {
-    throw error
-  }
-
+  if (error) throw error
   return (data ?? []) as T[]
 }
 
