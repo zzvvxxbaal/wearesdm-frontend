@@ -1,7 +1,4 @@
-import {
-  FormEvent,
-  useState,
-} from 'react'
+import { useState } from 'react'
 import {
   useQuery,
   useQueryClient,
