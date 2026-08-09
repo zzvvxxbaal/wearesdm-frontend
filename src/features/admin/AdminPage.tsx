@@ -19,7 +19,9 @@ export function AdminPage() {
   const { context } = useAuth()
   const qc = useQueryClient()
 
-  const [tab, setTab] = useState<'roles' | 'audit' | 'notifications'>('roles')
+  const [tab, setTab] = useState<
+    'roles' | 'audit' | 'notifications'
+  >('roles')
   const [assign, setAssign] = useState(false)
   const [error, setError] = useState('')
 
@@ -44,7 +46,8 @@ export function AdminPage() {
   } = useQuery({
     queryKey: ['notification-settings'],
     queryFn: api.notificationSettings.list,
-    enabled: !!context && tab === 'notifications',
+    enabled:
+      !!context && tab === 'notifications',
   })
 
   if (!context) {
@@ -57,10 +60,15 @@ export function AdminPage() {
         <div>
           <span className="eyebrow">ADMIN</span>
           <h1>관리자</h1>
-          <p>전체 역할 할당과 감사 로그를 관리합니다.</p>
+          <p>
+            전체 역할 할당과 감사 로그를
+            관리합니다.
+          </p>
         </div>
 
-        <Button onClick={() => setAssign(true)}>
+        <Button
+          onClick={() => setAssign(true)}
+        >
           역할 할당
         </Button>
       </div>
@@ -69,22 +77,36 @@ export function AdminPage() {
 
       <div className="tabs">
         <Button
-          variant={tab === 'roles' ? 'primary' : 'secondary'}
+          variant={
+            tab === 'roles'
+              ? 'primary'
+              : 'secondary'
+          }
           onClick={() => setTab('roles')}
         >
           역할 할당
         </Button>
 
         <Button
-          variant={tab === 'audit' ? 'primary' : 'secondary'}
+          variant={
+            tab === 'audit'
+              ? 'primary'
+              : 'secondary'
+          }
           onClick={() => setTab('audit')}
         >
           감사 로그
         </Button>
 
         <Button
-          variant={tab === 'notifications' ? 'primary' : 'secondary'}
-          onClick={() => setTab('notifications')}
+          variant={
+            tab === 'notifications'
+              ? 'primary'
+              : 'secondary'
+          }
+          onClick={() =>
+            setTab('notifications')
+          }
         >
           알림 정책
         </Button>
@@ -108,59 +130,86 @@ export function AdminPage() {
                 </thead>
 
                 <tbody>
-                  {assignments.map((assignment) => (
-                    <tr key={assignment.id}>
-                      <td>{assignment.user_id}</td>
+                  {assignments.map(
+                    (assignment) => (
+                      <tr
+                        key={assignment.id}
+                      >
+                        <td>
+                          {assignment.user_id}
+                        </td>
 
-                      <td>
-                        {
-                          context.roles.find(
-                            (role) => role.id === assignment.role_id,
-                          )?.name || assignment.role_id
-                        }
-                      </td>
+                        <td>
+                          {context.roles.find(
+                            (role) =>
+                              role.id ===
+                              assignment.role_id,
+                          )?.name ||
+                            assignment.role_id}
+                        </td>
 
-                      <td>
-                        {assignment.organization_id
-                          ? context.organizations.find(
-                              (organization) =>
-                                organization.id === assignment.organization_id,
-                            )?.name || assignment.organization_id
-                          : '전체'}
-                      </td>
+                        <td>
+                          {assignment.organization_id
+                            ? context.organizations.find(
+                                (organization) =>
+                                  organization.id ===
+                                  assignment.organization_id,
+                              )?.name ||
+                              assignment.organization_id
+                            : '전체'}
+                        </td>
 
-                      <td>
-                        {formatDateTime(assignment.created_at)}
-                      </td>
+                        <td>
+                          {formatDateTime(
+                            assignment.created_at,
+                          )}
+                        </td>
 
-                      <td>
-                        <Button
-                          variant="danger"
-                          onClick={async () => {
-                            if (!confirm('역할을 삭제할까요?')) {
-                              return
-                            }
+                        <td>
+                          <Button
+                            variant="danger"
+                            onClick={async () => {
+                              if (
+                                !confirm(
+                                  '역할을 삭제할까요?',
+                                )
+                              ) {
+                                return
+                              }
 
-                            try {
-                              await api.roles.remove(assignment.id)
+                              try {
+                                await api.roles.remove(
+                                  assignment.id,
+                                )
 
-                              await qc.invalidateQueries({
-                                queryKey: ['all-role-assignments'],
-                              })
+                                await qc.invalidateQueries(
+                                  {
+                                    queryKey: [
+                                      'all-role-assignments',
+                                    ],
+                                  },
+                                )
 
-                              await qc.invalidateQueries({
-                                queryKey: ['context'],
-                              })
-                            } catch (e) {
-                              setError(getErrorMessage(e))
-                            }
-                          }}
-                        >
-                          삭제
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                                await qc.invalidateQueries(
+                                  {
+                                    queryKey: [
+                                      'context',
+                                    ],
+                                  },
+                                )
+                              } catch (e) {
+                                setError(
+                                  getErrorMessage(e),
+                                )
+                              }
+                            }}
+                          >
+                            삭제
+                          </Button>
+                        </td>
+                      </tr>
+                    ),
+                  )}
                 </tbody>
               </table>
             </div>
@@ -182,10 +231,22 @@ export function AdminPage() {
               <tbody>
                 {audit.map((item: any) => (
                   <tr key={item.id}>
-                    <td>{formatDateTime(item.created_at)}</td>
+                    <td>
+                      {formatDateTime(
+                        item.created_at,
+                      )}
+                    </td>
+
                     <td>{item.action}</td>
-                    <td>{item.entity_type}</td>
-                    <td>{item.organization_id || '-'}</td>
+
+                    <td>
+                      {item.entity_type}
+                    </td>
+
+                    <td>
+                      {item.organization_id ||
+                        '-'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -197,38 +258,64 @@ export function AdminPage() {
       ) : (
         <Card>
           <div className="list">
-            {notificationSettings.map((setting: any) => (
-              <div className="list-row" key={setting.key}>
-                <div>
-                  <strong>{setting.key}</strong>
-                  <small>
-                    마지막 변경:{' '}
-                    {formatDateTime(setting.updated_at)}
-                  </small>
-                </div>
-
-                <Select
-                  value={String(setting.enabled)}
-                  onChange={async (event) => {
-                    try {
-                      await api.notificationSettings.save(
-                        setting.key,
-                        event.target.value === 'true',
-                      )
-
-                      await qc.invalidateQueries({
-                        queryKey: ['notification-settings'],
-                      })
-                    } catch (err) {
-                      setError(getErrorMessage(err))
-                    }
-                  }}
+            {notificationSettings.map(
+              (setting: any) => (
+                <div
+                  className="list-row"
+                  key={setting.key}
                 >
-                  <option value="true">사용</option>
-                  <option value="false">사용 안 함</option>
-                </Select>
-              </div>
-            ))}
+                  <div>
+                    <strong>
+                      {setting.key}
+                    </strong>
+
+                    <small>
+                      마지막 변경:{' '}
+                      {formatDateTime(
+                        setting.updated_at,
+                      )}
+                    </small>
+                  </div>
+
+                  <Select
+                    value={String(
+                      setting.enabled,
+                    )}
+                    onChange={async (
+                      event,
+                    ) => {
+                      try {
+                        await api.notificationSettings.save(
+                          setting.key,
+                          event.target.value ===
+                            'true',
+                        )
+
+                        await qc.invalidateQueries(
+                          {
+                            queryKey: [
+                              'notification-settings',
+                            ],
+                          },
+                        )
+                      } catch (err) {
+                        setError(
+                          getErrorMessage(err),
+                        )
+                      }
+                    }}
+                  >
+                    <option value="true">
+                      사용
+                    </option>
+
+                    <option value="false">
+                      사용 안 함
+                    </option>
+                  </Select>
+                </div>
+              ),
+            )}
           </div>
         </Card>
       )}
@@ -236,18 +323,29 @@ export function AdminPage() {
       {assign && (
         <RoleModal
           roles={context.roles}
-          organizations={context.organizations}
-          onClose={() => setAssign(false)}
+          organizations={
+            context.organizations
+          }
+          onClose={() =>
+            setAssign(false)
+          }
           onSave={async (value) => {
             try {
-              await api.roles.assign(value)
+              await api.roles.assign(
+                value,
+              )
+
               setAssign(false)
 
               await qc.invalidateQueries({
-                queryKey: ['all-role-assignments'],
+                queryKey: [
+                  'all-role-assignments',
+                ],
               })
             } catch (e) {
-              setError(getErrorMessage(e))
+              setError(
+                getErrorMessage(e),
+              )
             }
           }}
         />
@@ -265,39 +363,64 @@ function RoleModal({
   roles: any[]
   organizations: any[]
   onClose: () => void
-  onSave: (value: any) => Promise<void>
+  onSave: (
+    value: any,
+  ) => Promise<void>
 }) {
-  const [value, setValue] = useState({
-    user_id: '',
-    role_id:
-      roles.find((role) => role.key === 'team_leader')?.id ||
-      roles[0]?.id ||
-      '',
-    organization_id: null as string | null,
-  })
+  const [value, setValue] =
+    useState({
+      user_id: '',
+      role_id:
+        roles.find(
+          (role) =>
+            role.key ===
+            'team_leader',
+        )?.id ||
+        roles[0]?.id ||
+        '',
+      organization_id:
+        null as string | null,
+    })
 
-  const role = roles.find((item) => item.id === value.role_id)
+  const role = roles.find(
+    (item) =>
+      item.id === value.role_id,
+  )
 
-  const compatibleOrganizations = organizations.filter((organization) => {
-    if (role?.scope_type !== 'organization') {
-      return false
-    }
+  const compatibleOrganizations =
+    organizations.filter(
+      (organization) => {
+        if (
+          role?.scope_type !==
+          'organization'
+        ) {
+          return false
+        }
 
-    const organizationTypeByRole: Record<string, string> = {
-      team: 'team',
-      small_group: 'small_group',
-      club: 'club',
-      volunteer_team: 'volunteer_team',
-    }
+        const organizationTypeByRole:
+          Record<string, string> = {
+            team: 'team',
+            small_group:
+              'small_group',
+            club: 'club',
+            volunteer_team:
+              'volunteer_team',
+          }
 
-    return (
-      organizationTypeByRole[role.key] === organization.type ||
-      role.key === 'pastor'
+        return (
+          organizationTypeByRole[
+            role.key
+          ] === organization.type ||
+          role.key === 'pastor'
+        )
+      },
     )
-  })
 
   return (
-    <Modal title="역할 할당" onClose={onClose}>
+    <Modal
+      title="역할 할당"
+      onClose={onClose}
+    >
       <form
         className="stack"
         onSubmit={(event) => {
@@ -311,7 +434,8 @@ function RoleModal({
             onChange={(event) =>
               setValue({
                 ...value,
-                user_id: event.target.value,
+                user_id:
+                  event.target.value,
               })
             }
             placeholder="UUID"
@@ -325,43 +449,67 @@ function RoleModal({
             onChange={(event) =>
               setValue({
                 ...value,
-                role_id: event.target.value,
-                organization_id: null,
+                role_id:
+                  event.target.value,
+                organization_id:
+                  null,
               })
             }
           >
             {roles.map((item) => (
-              <option key={item.id} value={item.id}>
+              <option
+                key={item.id}
+                value={item.id}
+              >
                 {item.name}
               </option>
             ))}
           </Select>
         </Field>
 
-        {role?.scope_type === 'organization' && (
+        {role?.scope_type ===
+          'organization' && (
           <Field label="조직">
             <Select
-              value={value.organization_id || ''}
+              value={
+                value.organization_id ||
+                ''
+              }
               onChange={(event) =>
                 setValue({
                   ...value,
-                  organization_id: event.target.value,
+                  organization_id:
+                    event.target.value,
                 })
               }
               required
             >
-              <option value="">선택</option>
+              <option value="">
+                선택
+              </option>
 
               {compatibleOrganizations
-                .filter((organization) => organization.status === 'active')
-                .map((organization) => (
-                  <option
-                    key={organization.id}
-                    value={organization.id}
-                  >
-                    {organization.name}
-                  </option>
-                ))}
+                .filter(
+                  (organization) =>
+                    organization.status ===
+                    'active',
+                )
+                .map(
+                  (organization) => (
+                    <option
+                      key={
+                        organization.id
+                      }
+                      value={
+                        organization.id
+                      }
+                    >
+                      {
+                        organization.name
+                      }
+                    </option>
+                  ),
+                )}
             </Select>
           </Field>
         )}
