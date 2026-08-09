@@ -47,25 +47,36 @@ type PrayerCreateInput = {
   status: 'published'
 }
 
+type MediaType =
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'document'
+
+type MediaStatus =
+  | 'published'
+  | 'draft'
+  | 'archived'
+
 type MediaItem = {
   id: string
   organization_id: string | null
-  type: string
+  type: MediaType
   title: string
   description?: string | null
   external_url?: string | null
   storage_path?: string | null
-  status?: string | null
+  status?: MediaStatus | null
 }
 
 type MediaFormValue = {
   id?: string
   organization_id: string
-  type: string
+  type: MediaType
   title: string
   description: string
   external_url: string
-  status: string
+  status: MediaStatus
 }
 
 export function PrayerPage() {
@@ -84,16 +95,14 @@ export function PrayerPage() {
         activeMemberships.some(
           (membership) =>
             membership.organization_id ===
-            organization.id,
+              organization.id,
         ),
     ) ?? []
 
   const [orgId, setOrgId] =
-    useState(() => {
-      return (
-        organizations[0]?.id ?? ''
-      )
-    })
+    useState(() =>
+      organizations[0]?.id ?? '',
+    )
 
   const [create, setCreate] =
     useState(false)
@@ -107,11 +116,12 @@ export function PrayerPage() {
     data = [],
     isLoading,
   } = useQuery<PrayerRequestView[], Error>({
-    queryKey: [
-      'prayers',
-      orgId,
-    ],
+    queryKey: ['prayers', orgId],
     queryFn: async () => {
+      if (!orgId) {
+        return []
+      }
+
       const result =
         await Promise.resolve(
           api.prayers.list(orgId),
@@ -181,16 +191,10 @@ export function PrayerPage() {
             {organizations.map(
               (organization) => (
                 <option
-                  key={
-                    organization.id
-                  }
-                  value={
-                    organization.id
-                  }
+                  key={organization.id}
+                  value={organization.id}
                 >
-                  {
-                    organization.name
-                  }
+                  {organization.name}
                 </option>
               ),
             )}
@@ -230,14 +234,12 @@ export function PrayerPage() {
           onDone={async () => {
             setCreate(false)
 
-            await qc.invalidateQueries(
-              {
-                queryKey: [
-                  'prayers',
-                  orgId,
-                ],
-              },
-            )
+            await qc.invalidateQueries({
+              queryKey: [
+                'prayers',
+                orgId,
+              ],
+            })
           }}
           onError={setError}
         />
@@ -536,10 +538,7 @@ export function MediaPage() {
     data = [],
     isLoading,
   } = useQuery<MediaItem[], Error>({
-    queryKey: [
-      'media',
-      orgId,
-    ],
+    queryKey: ['media', orgId],
     queryFn: async () => {
       const result =
         await Promise.resolve(
@@ -584,11 +583,9 @@ export function MediaPage() {
         )
       }
 
-      await qc.invalidateQueries(
-        {
-          queryKey: ['media'],
-        },
-      )
+      await qc.invalidateQueries({
+        queryKey: ['media'],
+      })
 
       setEditing(null)
     } catch (error) {
@@ -652,16 +649,10 @@ export function MediaPage() {
             {organizations.map(
               (organization) => (
                 <option
-                  key={
-                    organization.id
-                  }
-                  value={
-                    organization.id
-                  }
+                  key={organization.id}
+                  value={organization.id}
                 >
-                  {
-                    organization.name
-                  }
+                  {organization.name}
                 </option>
               ),
             )}
@@ -868,16 +859,10 @@ function MediaModal({
             {organizations.map(
               (organization) => (
                 <option
-                  key={
-                    organization.id
-                  }
-                  value={
-                    organization.id
-                  }
+                  key={organization.id}
+                  value={organization.id}
                 >
-                  {
-                    organization.name
-                  }
+                  {organization.name}
                 </option>
               ),
             )}
@@ -892,7 +877,8 @@ function MediaModal({
                 (current) => ({
                   ...current,
                   type:
-                    event.target.value,
+                    event.target
+                      .value as MediaType,
                 }),
               )
             }
@@ -976,7 +962,8 @@ function MediaModal({
                 (current) => ({
                   ...current,
                   status:
-                    event.target.value,
+                    event.target
+                      .value as MediaStatus,
                 }),
               )
             }
