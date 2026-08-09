@@ -26,67 +26,65 @@ import { formatDateTime } from '../../lib/format'
 import { getErrorMessage } from '../../lib/errors'
 import type { PrayerRequest } from '../../types/domain'
 
-type PrayerRequestView = PrayerRequest & {
-  reacted_by_me?: boolean
-  reaction_count?: number
-  visible_author_name?: string | null
-  is_anonymous?: boolean
-  visibility?: 'public' | 'private'
-  title?: string | null
-  body?: string
-  created_at: string
-}
+type PrayerRequestView =
+  PrayerRequest & {
+    reacted_by_me?: boolean
+    reaction_count?: number
+    visible_author_name?:
+      | string
+      | null
+    is_anonymous?: boolean
+    visibility?:
+      | 'public'
+      | 'private'
+    title?: string | null
+    body?: string
+    created_at: string
+  }
 
 type PrayerCreateInput = {
   title: string
   body: string
-  visibility: 'public' | 'private'
+  visibility:
+    | 'public'
+    | 'private'
   is_anonymous: boolean
   organization_id: string
   author_id: string
   status: 'published'
 }
 
-type MediaType =
-  | 'image'
-  | 'video'
-  | 'audio'
-  | 'document'
+/*
+ * IMPORTANT:
+ * Do not redefine MediaType or MediaItem here.
+ *
+ * These types are derived directly from the
+ * existing api implementation so that the
+ * frontend form always follows the backend/API
+ * contract.
+ */
+type MediaFormValue =
+  Parameters<
+    typeof api.media.create
+  >[0]
 
-type MediaStatus =
-  | 'published'
-  | 'draft'
-  | 'archived'
-
-type MediaItem = {
-  id: string
-  organization_id: string | null
-  type: MediaType
-  title: string
-  description?: string | null
-  external_url?: string | null
-  storage_path?: string | null
-  status?: MediaStatus | null
-}
-
-type MediaFormValue = {
-  id?: string
-  organization_id: string
-  type: MediaType
-  title: string
-  description: string
-  external_url: string
-  status: MediaStatus
-}
+type MediaItem =
+  Awaited<
+    ReturnType<
+      typeof api.media.list
+    >
+  >[number]
 
 export function PrayerPage() {
   const { context } = useAuth()
+
   const authContext = context
 
   const activeMemberships =
     authContext?.memberships.filter(
       (membership) =>
-        membership.status === 'active',
+        membership.status ===
+        'active',
     ) ?? []
 
   const organizations =
@@ -99,38 +97,58 @@ export function PrayerPage() {
         ),
     ) ?? []
 
-  const [orgId, setOrgId] =
-    useState(() =>
-      organizations[0]?.id ?? '',
-    )
+  const [
+    orgId,
+    setOrgId,
+  ] = useState('')
 
-  const [create, setCreate] =
-    useState(false)
+  const [
+    create,
+    setCreate,
+  ] = useState(false)
 
-  const [error, setError] =
-    useState('')
+  const [
+    error,
+    setError,
+  ] = useState('')
 
   const qc = useQueryClient()
+
+  /*
+   * Initialize the organization after
+   * authentication context becomes available.
+   */
+  const effectiveOrgId =
+    orgId ||
+    organizations[0]?.id ||
+    ''
 
   const {
     data = [],
     isLoading,
-  } = useQuery<PrayerRequestView[], Error>({
-    queryKey: ['prayers', orgId],
+  } = useQuery<
+    PrayerRequestView[]
+  >({
+    queryKey: [
+      'prayers',
+      effectiveOrgId,
+    ],
+
     queryFn: async () => {
-      if (!orgId) {
+      if (!effectiveOrgId) {
         return []
       }
 
       const result =
-        await Promise.resolve(
-          api.prayers.list(orgId),
+        await api.prayers.list(
+          effectiveOrgId,
         )
 
       return result as PrayerRequestView[]
     },
+
     enabled:
-      !!orgId &&
+      !!effectiveOrgId &&
       !!authContext?.profile,
   })
 
@@ -141,7 +159,7 @@ export function PrayerPage() {
   const userId =
     authContext.profile.id
 
-  if (!orgId) {
+  if (!effectiveOrgId) {
     return (
       <Card>
         <Empty>
@@ -157,6 +175,7 @@ export function PrayerPage() {
       <div className="page-header">
         <div>
           <h1>기도제목</h1>
+
           <p>
             함께 기도하고 서로를
             격려하세요.
@@ -181,7 +200,7 @@ export function PrayerPage() {
       <Card>
         <Field label="조직">
           <Select
-            value={orgId}
+            value={effectiveOrgId}
             onChange={(event) =>
               setOrgId(
                 event.target.value,
@@ -226,7 +245,9 @@ export function PrayerPage() {
 
       {create && (
         <PrayerModal
-          organizationId={orgId}
+          organizationId={
+            effectiveOrgId
+          }
           userId={userId}
           onClose={() =>
             setCreate(false)
@@ -234,12 +255,14 @@ export function PrayerPage() {
           onDone={async () => {
             setCreate(false)
 
-            await qc.invalidateQueries({
-              queryKey: [
-                'prayers',
-                orgId,
-              ],
-            })
+            await qc.invalidateQueries(
+              {
+                queryKey: [
+                  'prayers',
+                  effectiveOrgId,
+                ],
+              },
+            )
           }}
           onError={setError}
         />
@@ -259,18 +282,26 @@ function PrayerCard({
     message: string,
   ) => void
 }) {
-  const [reacted, setReacted] =
-    useState(
-      prayer.reacted_by_me ?? false,
-    )
+  const [
+    reacted,
+    setReacted,
+  ] = useState(
+    prayer.reacted_by_me ??
+      false,
+  )
 
-  const [count, setCount] =
-    useState(
-      prayer.reaction_count ?? 0,
-    )
+  const [
+    count,
+    setCount,
+  ] = useState(
+    prayer.reaction_count ??
+      0,
+  )
 
-  const [busy, setBusy] =
-    useState(false)
+  const [
+    busy,
+    setBusy,
+  ] = useState(false)
 
   const toggle = async () => {
     if (busy) {
@@ -286,7 +317,9 @@ function PrayerCard({
         reacted,
       )
 
-      setReacted(!reacted)
+      setReacted(
+        !reacted,
+      )
 
       setCount(
         (current) =>
@@ -295,7 +328,9 @@ function PrayerCard({
       )
     } catch (error) {
       onError(
-        getErrorMessage(error),
+        getErrorMessage(
+          error,
+        ),
       )
     } finally {
       setBusy(false)
@@ -370,17 +405,19 @@ function PrayerModal({
     message: string,
   ) => void
 }) {
-  const [value, setValue] =
-    useState<PrayerCreateInput>({
-      title: '',
-      body: '',
-      visibility: 'public',
-      is_anonymous: false,
-      organization_id:
-        organizationId,
-      author_id: userId,
-      status: 'published',
-    })
+  const [
+    value,
+    setValue,
+  ] = useState<PrayerCreateInput>({
+    title: '',
+    body: '',
+    visibility: 'public',
+    is_anonymous: false,
+    organization_id:
+      organizationId,
+    author_id: userId,
+    status: 'published',
+  })
 
   return (
     <Modal
@@ -521,36 +558,46 @@ function PrayerModal({
 export function MediaPage() {
   const { context } = useAuth()
 
-  const [orgId, setOrgId] =
-    useState('all')
+  const [
+    orgId,
+    setOrgId,
+  ] = useState('all')
 
-  const [editing, setEditing] =
+  const [
+    editing,
+    setEditing,
+  ] =
     useState<MediaFormValue | null>(
       null,
     )
 
-  const [error, setError] =
-    useState('')
+  const [
+    error,
+    setError,
+  ] = useState('')
 
   const qc = useQueryClient()
 
   const {
     data = [],
     isLoading,
-  } = useQuery<MediaItem[], Error>({
-    queryKey: ['media', orgId],
+  } = useQuery<MediaItem[]>({
+    queryKey: [
+      'media',
+      orgId,
+    ],
+
     queryFn: async () => {
       const result =
-        await Promise.resolve(
-          api.media.list(
-            orgId === 'all'
-              ? undefined
-              : orgId,
-          ),
+        await api.media.list(
+          orgId === 'all'
+            ? undefined
+            : orgId,
         )
 
       return result as MediaItem[]
     },
+
     enabled: !!context,
   })
 
@@ -583,14 +630,18 @@ export function MediaPage() {
         )
       }
 
-      await qc.invalidateQueries({
-        queryKey: ['media'],
-      })
+      await qc.invalidateQueries(
+        {
+          queryKey: ['media'],
+        },
+      )
 
       setEditing(null)
     } catch (error) {
       setError(
-        getErrorMessage(error),
+        getErrorMessage(
+          error,
+        ),
       )
     }
   }
@@ -600,24 +651,32 @@ export function MediaPage() {
       <div className="page-header">
         <div>
           <h1>미디어</h1>
+
           <p>
             사진, 영상, 오디오,
             문서를 관리합니다.
           </p>
         </div>
 
-        {manageable.length > 0 && (
+        {manageable.length >
+          0 && (
           <Button
             onClick={() =>
               setEditing({
                 organization_id:
                   manageable[0].id,
-                type: 'document',
+
+                type:
+                  'document' as MediaFormValue['type'],
+
                 title: '',
+
                 description: '',
+
                 external_url: '',
+
                 status:
-                  'published',
+                  'published' as MediaFormValue['status'],
               })
             }
           >
@@ -667,7 +726,9 @@ export function MediaPage() {
           {data.map((media) => (
             <Card key={media.id}>
               <Badge>
-                {media.type}
+                {String(
+                  media.type,
+                )}
               </Badge>
 
               <h2>
@@ -714,22 +775,28 @@ export function MediaPage() {
                     onClick={() =>
                       setEditing({
                         id: media.id,
+
                         organization_id:
                           media.organization_id ??
                           '',
+
                         type:
                           media.type,
+
                         title:
                           media.title,
+
                         description:
                           media.description ??
                           '',
+
                         external_url:
                           media.external_url ??
                           '',
+
                         status:
                           media.status ??
-                          'published',
+                          ('published' as MediaFormValue['status']),
                       })
                     }
                   >
@@ -815,10 +882,12 @@ function MediaModal({
     value: MediaFormValue,
   ) => Promise<void>
 }) {
-  const [state, setState] =
-    useState<MediaFormValue>(
-      value,
-    )
+  const [
+    state,
+    setState,
+  ] = useState<MediaFormValue>(
+    value,
+  )
 
   return (
     <Modal
@@ -833,13 +902,15 @@ function MediaModal({
         className="stack"
         onSubmit={(event) => {
           event.preventDefault()
+
           void onSave(state)
         }}
       >
         <Field label="조직">
           <Select
             value={
-              state.organization_id
+              state.organization_id ??
+              ''
             }
             onChange={(event) =>
               setState(
@@ -871,14 +942,17 @@ function MediaModal({
 
         <Field label="유형">
           <Select
-            value={state.type}
+            value={
+              state.type ?? ''
+            }
             onChange={(event) =>
               setState(
                 (current) => ({
                   ...current,
+
                   type:
                     event.target
-                      .value as MediaType,
+                      .value as MediaFormValue['type'],
                 }),
               )
             }
@@ -903,7 +977,9 @@ function MediaModal({
 
         <Field label="제목">
           <Input
-            value={state.title}
+            value={
+              state.title ?? ''
+            }
             onChange={(event) =>
               setState(
                 (current) => ({
@@ -920,12 +996,14 @@ function MediaModal({
         <Field label="설명">
           <Textarea
             value={
-              state.description
+              state.description ??
+              ''
             }
             onChange={(event) =>
               setState(
                 (current) => ({
                   ...current,
+
                   description:
                     event.target.value,
                 }),
@@ -937,12 +1015,14 @@ function MediaModal({
         <Field label="외부 URL">
           <Input
             value={
-              state.external_url
+              state.external_url ??
+              ''
             }
             onChange={(event) =>
               setState(
                 (current) => ({
                   ...current,
+
                   external_url:
                     event.target.value,
                 }),
@@ -955,15 +1035,17 @@ function MediaModal({
         <Field label="상태">
           <Select
             value={
-              state.status
+              state.status ??
+              'published'
             }
             onChange={(event) =>
               setState(
                 (current) => ({
                   ...current,
+
                   status:
                     event.target
-                      .value as MediaStatus,
+                      .value as MediaFormValue['status'],
                 }),
               )
             }
