@@ -51,13 +51,30 @@ type PrayerCreateValue = {
 }
 
 /*
- * Media form state uses the exact same type
- * expected by api.media.create/update.
+ * MediaFormValue is deliberately based on MediaItem.
  *
- * This intentionally avoids defining a second
- * MediaType or a separate string-based form type.
+ * The important point is that `type` must retain the
+ * exact MediaItem type instead of becoming `string`.
  */
-type MediaFormValue = Partial<MediaItem>
+type MediaFormValue = Omit<
+  Partial<MediaItem>,
+  'type'
+> & {
+  type?: MediaItem['type']
+}
+
+/*
+ * Convert the form value to exactly the type expected
+ * by the media API.
+ */
+function toMediaItemInput(
+  value: MediaFormValue,
+): Partial<MediaItem> {
+  return {
+    ...value,
+    type: value.type,
+  }
+}
 
 export function PrayerPage() {
   const { context } = useAuth()
@@ -123,9 +140,20 @@ export function PrayerPage() {
       !!authContext?.profile,
   })
 
+  /*
+   * From this point downward, profile is guaranteed
+   * to exist for this render.
+   *
+   * We intentionally extract the ID into a primitive
+   * value so TypeScript does not have to reason about
+   * nullable authContext.profile inside callbacks.
+   */
   if (!authContext?.profile) {
     return <Spinner />
   }
+
+  const profileId =
+    authContext.profile.id
 
   if (!effectiveOrgId) {
     return (
@@ -197,9 +225,7 @@ export function PrayerPage() {
             <PrayerCard
               key={prayer.id}
               prayer={prayer}
-              userId={
-                authContext.profile.id
-              }
+              userId={profileId}
               onError={setError}
             />
           ))}
@@ -218,9 +244,7 @@ export function PrayerPage() {
           organizationId={
             effectiveOrgId
           }
-          userId={
-            authContext.profile.id
-          }
+          userId={profileId}
           onClose={() =>
             setCreate(false)
           }
@@ -578,21 +602,17 @@ export function MediaPage() {
     value: MediaFormValue,
   ) => {
     try {
-      /*
-       * MediaFormValue is exactly
-       * Partial<MediaItem>.
-       *
-       * Therefore the API receives
-       * exactly the type it declares.
-       */
+      const input =
+        toMediaItemInput(value)
+
       if (value.id) {
         await api.media.update(
           value.id,
-          value,
+          input,
         )
       } else {
         await api.media.create(
-          value,
+          input,
         )
       }
 
