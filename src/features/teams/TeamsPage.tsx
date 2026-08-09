@@ -1,8 +1,14 @@
 import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { api } from '../../services/api'
 import { useAuth } from '../../app/AuthProvider'
-import { canPermission, isAdmin } from '../../lib/permissions'
+import {
+  canPermission,
+  isAdmin,
+} from '../../lib/permissions'
 import {
   Button,
   Card,
@@ -15,86 +21,145 @@ import {
   Spinner,
   Badge,
 } from '../../components/ui'
-import { organizationTypeLabel } from '../../lib/format'
-import { getErrorMessage } from '../../lib/errors'
+import {
+  organizationTypeLabel,
+} from '../../lib/format'
+import {
+  getErrorMessage,
+} from '../../lib/errors'
 
 export function TeamsPage() {
-  const { context, refresh } = useAuth()
+  const {
+    context,
+    refresh,
+  } = useAuth()
+
   const qc = useQueryClient()
 
-  const [selected, setSelected] = useState<string | undefined>(
+  const [
+    selected,
+    setSelected,
+  ] = useState<
+    string | undefined
+  >(
     context?.memberships.find(
-      (membership) => membership.status === 'active',
+      (membership) =>
+        membership.status ===
+        'active',
     )?.organization_id,
   )
 
-  const [create, setCreate] = useState<any>(false)
-  const [error, setError] = useState('')
+  const [
+    create,
+    setCreate,
+  ] = useState<any>(false)
+
+  const [error, setError] =
+    useState('')
 
   const orgs =
     context?.organizations.filter(
-      (organization) => organization.status === 'active',
+      (organization) =>
+        organization.status ===
+        'active',
     ) ?? []
 
-  const selectedOrg = orgs.find(
-    (organization) => organization.id === selected,
-  )
+  const selectedOrg =
+    orgs.find(
+      (organization) =>
+        organization.id ===
+        selected,
+    )
 
   const {
     data: members = [],
     isLoading,
   } = useQuery({
-    queryKey: ['members', selected],
+    queryKey: [
+      'members',
+      selected,
+    ],
     queryFn: () =>
       selected
-        ? api.profiles.visible(selected)
+        ? api.profiles.visible(
+            selected,
+          )
         : Promise.resolve([]),
     enabled: !!selected,
   })
 
-  const { data: memberships = [] } = useQuery({
-    queryKey: ['memberships', selected],
+  const {
+    data: memberships = [],
+  } = useQuery({
+    queryKey: [
+      'memberships',
+      selected,
+    ],
     queryFn: () =>
       selected
-        ? api.memberships.list(selected)
+        ? api.memberships.list(
+            selected,
+          )
         : Promise.resolve([]),
     enabled: !!selected,
   })
 
-  const save = async (value: any) => {
-    try {
-      await api.organizations.create(value)
-      await refresh()
-      setCreate(false)
-    } catch (e) {
-      setError(getErrorMessage(e))
-    }
-  }
-
-  const updateMembership = async (
-    id: string,
-    status: 'active' | 'removed',
+  const save = async (
+    value: any,
   ) => {
     try {
-      await api.memberships.update(id, {
-        status,
-        left_at:
-          status === 'removed'
-            ? new Date().toISOString()
-            : null,
-      })
+      await api.organizations.create(
+        value,
+      )
 
-      await qc.invalidateQueries({
-        queryKey: ['memberships', selected],
-      })
+      await refresh()
 
-      await qc.invalidateQueries({
-        queryKey: ['members', selected],
-      })
+      setCreate(false)
     } catch (e) {
-      setError(getErrorMessage(e))
+      setError(
+        getErrorMessage(e),
+      )
     }
   }
+
+  const updateMembership =
+    async (
+      id: string,
+      status:
+        | 'active'
+        | 'removed',
+    ) => {
+      try {
+        await api.memberships.update(
+          id,
+          {
+            status,
+            left_at:
+              status === 'removed'
+                ? new Date().toISOString()
+                : null,
+          },
+        )
+
+        await qc.invalidateQueries({
+          queryKey: [
+            'memberships',
+            selected,
+          ],
+        })
+
+        await qc.invalidateQueries({
+          queryKey: [
+            'members',
+            selected,
+          ],
+        })
+      } catch (e) {
+        setError(
+          getErrorMessage(e),
+        )
+      }
+    }
 
   return (
     <div className="stack-lg">
@@ -102,7 +167,9 @@ export function TeamsPage() {
         <div>
           <h1>조직 / 팀</h1>
           <p>
-            팀, 순, 동아리, 봉사팀의 소속과 구성원을 확인합니다.
+            팀, 순, 동아리,
+            봉사팀의 소속과
+            구성원을 확인합니다.
           </p>
         </div>
 
@@ -113,7 +180,8 @@ export function TeamsPage() {
                 type: 'team',
                 name: '',
                 description: '',
-                parent_organization_id: null,
+                parent_organization_id:
+                  null,
               })
             }
           >
@@ -122,41 +190,65 @@ export function TeamsPage() {
         )}
       </div>
 
-      {error && <ErrorBox message={error} />}
+      {error && (
+        <ErrorBox
+          message={error}
+        />
+      )}
 
       <div className="team-layout">
         <Card className="org-list">
-          <h2>내가 접근 가능한 조직</h2>
+          <h2>
+            내가 접근 가능한 조직
+          </h2>
 
           {orgs.length ? (
             <div className="list">
-              {orgs.map((organization) => (
-                <button
-                  className={`org-item ${
-                    selected === organization.id
-                      ? 'selected'
-                      : ''
-                  }`}
-                  key={organization.id}
-                  onClick={() =>
-                    setSelected(organization.id)
-                  }
-                >
-                  <div>
-                    <strong>{organization.name}</strong>
-                    <small>
-                      {organizationTypeLabel(
-                        organization.type,
-                      )}
-                    </small>
-                  </div>
+              {orgs.map(
+                (organization) => (
+                  <button
+                    className={`org-item ${
+                      selected ===
+                      organization.id
+                        ? 'selected'
+                        : ''
+                    }`}
+                    key={
+                      organization.id
+                    }
+                    onClick={() =>
+                      setSelected(
+                        organization.id,
+                      )
+                    }
+                  >
+                    <div>
+                      <strong>
+                        {
+                          organization.name
+                        }
+                      </strong>
 
-                  <Badge>{organization.status}</Badge>
-                </button>
-              ))}
+                      <small>
+                        {organizationTypeLabel(
+                          organization.type,
+                        )}
+                      </small>
+                    </div>
+
+                    <Badge>
+                      {
+                        organization.status
+                      }
+                    </Badge>
+                  </button>
+                ),
+              )}
             </div>
           ) : (
-            <Empty>조직이 없습니다.</Empty>
+            <Empty>
+              조직이 없습니다.
+            </Empty>
           )}
         </Card>
 
@@ -165,14 +257,19 @@ export function TeamsPage() {
             <>
               <div className="section-title">
                 <div>
-                  <h2>{selectedOrg.name}</h2>
+                  <h2>
+                    {selectedOrg.name}
+                  </h2>
+
                   <p>
                     {selectedOrg.description ||
                       '설명 없음'}
                   </p>
                 </div>
 
-                {(isAdmin(context) ||
+                {(isAdmin(
+                  context,
+                ) ||
                   canPermission(
                     context,
                     'membership.manage',
@@ -182,11 +279,13 @@ export function TeamsPage() {
                     variant="secondary"
                     onClick={() =>
                       setCreate({
-                        membership: true,
+                        membership:
+                          true,
                         organization_id:
                           selectedOrg.id,
                         user_id: '',
-                        status: 'active',
+                        status:
+                          'active',
                       })
                     }
                   >
@@ -203,7 +302,9 @@ export function TeamsPage() {
                 </Badge>
 
                 <Badge tone="success">
-                  {selectedOrg.status}
+                  {
+                    selectedOrg.status
+                  }
                 </Badge>
               </div>
 
@@ -211,66 +312,85 @@ export function TeamsPage() {
                 <Spinner />
               ) : members.length ? (
                 <div className="member-grid">
-                  {members.map((member) => {
-                    const membership = memberships.find(
-                      (item) =>
-                        item.user_id === member.id,
-                    )
+                  {members.map(
+                    (member) => {
+                      const membership =
+                        memberships.find(
+                          (item) =>
+                            item.user_id ===
+                            member.id,
+                        )
 
-                    return (
-                      <div
-                        className="member-card"
-                        key={member.id}
-                      >
-                        <div className="avatar large">
-                          {member.display_name.slice(0, 1)}
-                        </div>
+                      return (
+                        <div
+                          className="member-card"
+                          key={
+                            member.id
+                          }
+                        >
+                          <div className="avatar large">
+                            {member.display_name.slice(
+                              0,
+                              1,
+                            )}
+                          </div>
 
-                        <div>
-                          <strong>
-                            {member.display_name}
-                          </strong>
-
-                          <small>
-                            {member.status}
-                          </small>
-                        </div>
-
-                        {membership &&
-                          (isAdmin(context) ||
-                            canPermission(
-                              context,
-                              'membership.manage',
-                              selectedOrg.id,
-                            )) && (
-                            <Button
-                              variant="ghost"
-                              onClick={() =>
-                                updateMembership(
-                                  membership.id,
-                                  membership.status ===
-                                    'removed'
-                                    ? 'active'
-                                    : 'removed',
-                                )
+                          <div>
+                            <strong>
+                              {
+                                member.display_name
                               }
-                            >
-                              {membership.status ===
-                              'removed'
-                                ? '복구'
-                                : '내보내기'}
-                            </Button>
-                          )}
-                      </div>
-                    )
-                  })}
+                            </strong>
+
+                            <small>
+                              {
+                                member.status
+                              }
+                            </small>
+                          </div>
+
+                          {membership &&
+                            (isAdmin(
+                              context,
+                            ) ||
+                              canPermission(
+                                context,
+                                'membership.manage',
+                                selectedOrg.id,
+                              )) && (
+                              <Button
+                                variant="ghost"
+                                onClick={() =>
+                                  updateMembership(
+                                    membership.id,
+                                    membership.status ===
+                                      'removed'
+                                      ? 'active'
+                                      : 'removed',
+                                  )
+                                }
+                              >
+                                {membership.status ===
+                                'removed'
+                                  ? '복구'
+                                  : '내보내기'}
+                              </Button>
+                            )}
+                        </div>
+                      )
+                    },
+                  )}
                 </div>
               ) : (
-                <Empty>구성원이 없습니다.</Empty>
+                <Empty>
+                  구성원이 없습니다.
+                </Empty>
               )}
             </>
           ) : (
-            <Empty>조직을 선택하세요.</Empty>
+            <Empty>
+              조직을 선택하세요.
+            </Empty>
           )}
         </Card>
       </div>
@@ -278,8 +398,12 @@ export function TeamsPage() {
       {create?.membership ? (
         <MembershipModal
           value={create}
-          onClose={() => setCreate(false)}
-          onSave={async (value) => {
+          onClose={() =>
+            setCreate(false)
+          }
+          onSave={async (
+            value,
+          ) => {
             try {
               await api.memberships.add(
                 value.organization_id,
@@ -287,23 +411,29 @@ export function TeamsPage() {
                 value.status,
               )
 
-              await qc.invalidateQueries({
-                queryKey: [
-                  'memberships',
-                  value.organization_id,
-                ],
-              })
+              await qc.invalidateQueries(
+                {
+                  queryKey: [
+                    'memberships',
+                    value.organization_id,
+                  ],
+                },
+              )
 
-              await qc.invalidateQueries({
-                queryKey: [
-                  'members',
-                  value.organization_id,
-                ],
-              })
+              await qc.invalidateQueries(
+                {
+                  queryKey: [
+                    'members',
+                    value.organization_id,
+                  ],
+                },
+              )
 
               setCreate(false)
             } catch (e) {
-              setError(getErrorMessage(e))
+              setError(
+                getErrorMessage(e),
+              )
             }
           }}
         />
@@ -312,7 +442,9 @@ export function TeamsPage() {
           <OrganizationModal
             value={create}
             organizations={orgs}
-            onClose={() => setCreate(false)}
+            onClose={() =>
+              setCreate(false)
+            }
             onSave={save}
           />
         )
@@ -330,12 +462,18 @@ function OrganizationModal({
   value: any
   organizations: any[]
   onClose: () => void
-  onSave: (value: any) => Promise<void>
+  onSave: (
+    value: any,
+  ) => Promise<void>
 }) {
-  const [state, setState] = useState(value)
+  const [state, setState] =
+    useState(value)
 
   return (
-    <Modal title="조직 만들기" onClose={onClose}>
+    <Modal
+      title="조직 만들기"
+      onClose={onClose}
+    >
       <form
         className="stack"
         onSubmit={(event) => {
@@ -349,12 +487,16 @@ function OrganizationModal({
             onChange={(event) =>
               setState({
                 ...state,
-                type: event.target.value,
+                type:
+                  event.target.value,
                 parent_organization_id:
-                  event.target.value === 'small_group'
+                  event.target
+                    .value ===
+                  'small_group'
                     ? organizations.find(
                         (organization) =>
-                          organization.type === 'team',
+                          organization.type ===
+                          'team',
                       )?.id ?? null
                     : null,
               })
@@ -366,17 +508,26 @@ function OrganizationModal({
               'club',
               'volunteer_team',
             ].map((type) => (
-              <option key={type} value={type}>
-                {organizationTypeLabel(type)}
+              <option
+                key={type}
+                value={type}
+              >
+                {organizationTypeLabel(
+                  type,
+                )}
               </option>
             ))}
           </Select>
         </Field>
 
-        {state.type === 'small_group' && (
+        {state.type ===
+          'small_group' && (
           <Field label="상위 팀">
             <Select
-              value={state.parent_organization_id || ''}
+              value={
+                state.parent_organization_id ||
+                ''
+              }
               onChange={(event) =>
                 setState({
                   ...state,
@@ -386,21 +537,32 @@ function OrganizationModal({
               }
               required
             >
-              <option value="">선택</option>
+              <option value="">
+                선택
+              </option>
 
               {organizations
                 .filter(
                   (organization) =>
-                    organization.type === 'team',
+                    organization.type ===
+                    'team',
                 )
-                .map((organization) => (
-                  <option
-                    key={organization.id}
-                    value={organization.id}
-                  >
-                    {organization.name}
-                  </option>
-                ))}
+                .map(
+                  (organization) => (
+                    <option
+                      key={
+                        organization.id
+                      }
+                      value={
+                        organization.id
+                      }
+                    >
+                      {
+                        organization.name
+                      }
+                    </option>
+                  ),
+                )}
             </Select>
           </Field>
         )}
@@ -411,7 +573,8 @@ function OrganizationModal({
             onChange={(event) =>
               setState({
                 ...state,
-                name: event.target.value,
+                name:
+                  event.target.value,
               })
             }
             required
@@ -421,11 +584,15 @@ function OrganizationModal({
 
         <Field label="설명">
           <Input
-            value={state.description || ''}
+            value={
+              state.description ||
+              ''
+            }
             onChange={(event) =>
               setState({
                 ...state,
-                description: event.target.value,
+                description:
+                  event.target.value,
               })
             }
           />
@@ -440,7 +607,9 @@ function OrganizationModal({
             취소
           </Button>
 
-          <Button>생성</Button>
+          <Button>
+            생성
+          </Button>
         </div>
       </form>
     </Modal>
@@ -454,12 +623,18 @@ function MembershipModal({
 }: {
   value: any
   onClose: () => void
-  onSave: (value: any) => Promise<void>
+  onSave: (
+    value: any,
+  ) => Promise<void>
 }) {
-  const [state, setState] = useState(value)
+  const [state, setState] =
+    useState(value)
 
   return (
-    <Modal title="회원 추가" onClose={onClose}>
+    <Modal
+      title="회원 추가"
+      onClose={onClose}
+    >
       <form
         className="stack"
         onSubmit={(event) => {
@@ -468,8 +643,10 @@ function MembershipModal({
         }}
       >
         <p className="muted">
-          사용자의 Supabase Auth UUID를 입력하세요.
-          관리자 화면에서는 이후 검색 UI를 확장할 수
+          사용자의 Supabase Auth
+          UUID를 입력하세요.
+          관리자 화면에서는 이후
+          검색 UI를 확장할 수
           있습니다.
         </p>
 
@@ -479,7 +656,8 @@ function MembershipModal({
             onChange={(event) =>
               setState({
                 ...state,
-                user_id: event.target.value,
+                user_id:
+                  event.target.value,
               })
             }
             required
@@ -493,12 +671,18 @@ function MembershipModal({
             onChange={(event) =>
               setState({
                 ...state,
-                status: event.target.value,
+                status:
+                  event.target.value,
               })
             }
           >
-            <option value="active">활성</option>
-            <option value="pending">대기</option>
+            <option value="active">
+              활성
+            </option>
+
+            <option value="pending">
+              대기
+            </option>
           </Select>
         </Field>
 
@@ -511,7 +695,11 @@ function MembershipModal({
             취소
           </Button>
 
-          <Button>추가</Button>
+          <Button>
+            추가
+          </Button>
         </div>
       </form>
-    </Modal
+    </Modal>
+  )
+}
