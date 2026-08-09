@@ -25,7 +25,6 @@ import {
 import { formatDateTime } from '../../lib/format'
 import { getErrorMessage } from '../../lib/errors'
 import type {
-  MediaItem,
   PrayerRequest,
 } from '../../types/domain'
 
@@ -51,29 +50,125 @@ type PrayerCreateValue = {
 }
 
 /*
- * MediaFormValue is deliberately based on MediaItem.
+ * Media types are derived directly from the API.
  *
- * The important point is that `type` must retain the
- * exact MediaItem type instead of becoming `string`.
+ * Do not import MediaItem from domain.ts here.
+ *
+ * The previous implementation used:
+ *
+ *   Partial<MediaItem>
+ *
+ * from ../../types/domain.
+ *
+ * The API media methods use their own MediaItem type,
+ * which caused two different MediaType definitions to
+ * become incompatible even though they had the same name.
+ *
+ * By deriving the form type from api.media.create,
+ * the form and API now use exactly the same type.
  */
-type MediaFormValue = Omit<
-  Partial<MediaItem>,
-  'type'
-> & {
-  type?: MediaItem['type']
+type MediaCreateInput =
+  Parameters<
+    typeof api.media.create
+  >[0]
+
+type MediaUpdateInput =
+  Parameters<
+    typeof api.media.update
+  >[1]
+
+/*
+ * The media list item is derived from the actual API
+ * response rather than from a separately imported
+ * domain MediaItem.
+ */
+type MediaListResult =
+  Awaited<
+    ReturnType<typeof api.media.list>
+  >
+
+type MediaItem =
+  MediaListResult extends Array<
+    infer Item
+  >
+    ? Item
+    : never
+
+/*
+ * The form uses the exact create-input type used
+ * by api.media.create.
+ *
+ * `id` is added because an existing media item is
+ * edited through the same form.
+ */
+type MediaFormValue =
+  MediaCreateInput & {
+    id?: string
+  }
+
+/*
+ * The media type used by the API create input.
+ *
+ * This is intentionally derived from the API instead
+ * of being recreated locally.
+ */
+type MediaType =
+  NonNullable<
+    MediaCreateInput['type']
+  >
+
+/*
+ * Convert an existing API media item into the form
+ * shape explicitly.
+ *
+ * We do not spread the entire domain object into the
+ * form because that can reintroduce incompatible
+ * properties from another type declaration.
+ */
+function mediaItemToFormValue(
+  media: MediaItem,
+): MediaFormValue {
+  return {
+    id: media.id,
+    organization_id:
+      media.organization_id,
+    type: media.type as MediaType,
+    title: media.title ?? '',
+    description:
+      media.description ?? '',
+    external_url:
+      media.external_url ?? '',
+    status: media.status,
+  }
 }
 
 /*
- * Convert the form value to exactly the type expected
- * by the media API.
+ * Convert the form into the exact input type required
+ * by api.media.create / api.media.update.
+ *
+ * The return type is deliberately tied to the API
+ * parameter type.
  */
-function toMediaItemInput(
+function toMediaCreateInput(
   value: MediaFormValue,
-): Partial<MediaItem> {
-  return {
-    ...value,
-    type: value.type,
-  }
+): MediaCreateInput {
+  const {
+    id: _id,
+    ...input
+  } = value
+
+  return input
+}
+
+function toMediaUpdateInput(
+  value: MediaFormValue,
+): MediaUpdateInput {
+  const {
+    id: _id,
+    ...input
+  } = value
+
+  return input as MediaUpdateInput
 }
 
 export function PrayerPage() {
@@ -93,7 +188,7 @@ export function PrayerPage() {
         activeMemberships.some(
           (membership) =>
             membership.organization_id ===
-              organization.id,
+            organization.id,
         ),
     ) ?? []
 
@@ -141,12 +236,8 @@ export function PrayerPage() {
   })
 
   /*
-   * From this point downward, profile is guaranteed
-   * to exist for this render.
-   *
-   * We intentionally extract the ID into a primitive
-   * value so TypeScript does not have to reason about
-   * nullable authContext.profile inside callbacks.
+   * TypeScript narrowing is performed before any
+   * callback uses the profile.
    */
   if (!authContext?.profile) {
     return <Spinner />
@@ -602,15 +693,22 @@ export function MediaPage() {
     value: MediaFormValue,
   ) => {
     try {
-      const input =
-        toMediaItemInput(value)
-
       if (value.id) {
+        const input =
+          toMediaUpdateInput(
+            value,
+          )
+
         await api.media.update(
           value.id,
           input,
         )
       } else {
+        const input =
+          toMediaCreateInput(
+            value,
+          )
+
         await api.media.create(
           input,
         )
@@ -649,7 +747,8 @@ export function MediaPage() {
               setEditing({
                 organization_id:
                   manageable[0].id,
-                type: 'document',
+                type:
+                  'document' as MediaType,
                 title: '',
                 description: '',
                 external_url: '',
@@ -753,9 +852,11 @@ export function MediaPage() {
                     <Button
                       variant="secondary"
                       onClick={() =>
-                        setEditing({
-                          ...media,
-                        })
+                        setEditing(
+                          mediaItemToFormValue(
+                            media,
+                          ),
+                        )
                       }
                     >
                       수정
@@ -908,7 +1009,7 @@ function MediaModal({
             onChange={(event) => {
               const nextType =
                 event.target
-                  .value as MediaItem['type']
+                  .value as MediaType
 
               setState(
                 (current) => ({
@@ -1002,7 +1103,7 @@ function MediaModal({
                 (current) => ({
                   ...current,
                   status:
-                    event.target.value as MediaItem['status'],
+                    event.target.value as MediaCreateInput['status'],
                 }),
               )
             }
