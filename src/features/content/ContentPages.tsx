@@ -24,7 +24,10 @@ import {
 } from '../../components/ui'
 import { formatDateTime } from '../../lib/format'
 import { getErrorMessage } from '../../lib/errors'
-import type { PrayerRequest } from '../../types/domain'
+import type {
+  MediaItem,
+  PrayerRequest,
+} from '../../types/domain'
 
 type PrayerRequestView =
   PrayerRequest & {
@@ -54,26 +57,8 @@ type PrayerCreateInput = {
   status: 'published'
 }
 
-/*
- * IMPORTANT:
- * Do not redefine MediaType or MediaItem here.
- *
- * These types are derived directly from the
- * existing api implementation so that the
- * frontend form always follows the backend/API
- * contract.
- */
 type MediaFormValue =
-  Parameters<
-    typeof api.media.create
-  >[0]
-
-type MediaItem =
-  Awaited<
-    ReturnType<
-      typeof api.media.list
-    >
-  >[number]
+  Partial<MediaItem>
 
 export function PrayerPage() {
   const { context } = useAuth()
@@ -114,10 +99,6 @@ export function PrayerPage() {
 
   const qc = useQueryClient()
 
-  /*
-   * Initialize the organization after
-   * authentication context becomes available.
-   */
   const effectiveOrgId =
     orgId ||
     organizations[0]?.id ||
@@ -595,7 +576,7 @@ export function MediaPage() {
             : orgId,
         )
 
-      return result as MediaItem[]
+      return result
     },
 
     enabled: !!context,
@@ -665,18 +646,12 @@ export function MediaPage() {
               setEditing({
                 organization_id:
                   manageable[0].id,
-
-                type:
-                  'document' as MediaFormValue['type'],
-
+                type: 'document',
                 title: '',
-
                 description: '',
-
                 external_url: '',
-
                 status:
-                  'published' as MediaFormValue['status'],
+                  'published',
               })
             }
           >
@@ -726,9 +701,7 @@ export function MediaPage() {
           {data.map((media) => (
             <Card key={media.id}>
               <Badge>
-                {String(
-                  media.type,
-                )}
+                {media.type}
               </Badge>
 
               <h2>
@@ -775,28 +748,32 @@ export function MediaPage() {
                     onClick={() =>
                       setEditing({
                         id: media.id,
-
                         organization_id:
-                          media.organization_id ??
-                          '',
-
+                          media.organization_id,
                         type:
                           media.type,
-
                         title:
                           media.title,
-
                         description:
-                          media.description ??
-                          '',
-
+                          media.description,
+                        storage_bucket:
+                          media.storage_bucket,
+                        storage_path:
+                          media.storage_path,
                         external_url:
-                          media.external_url ??
-                          '',
-
+                          media.external_url,
+                        mime_type:
+                          media.mime_type,
+                        file_size_bytes:
+                          media.file_size_bytes,
+                        duration_seconds:
+                          media.duration_seconds,
+                        thumbnail_path:
+                          media.thumbnail_path,
                         status:
-                          media.status ??
-                          ('published' as MediaFormValue['status']),
+                          media.status,
+                        uploaded_by:
+                          media.uploaded_by,
                       })
                     }
                   >
@@ -949,15 +926,13 @@ function MediaModal({
               setState(
                 (current) => ({
                   ...current,
-
                   type:
-                    event.target
-                      .value as MediaFormValue['type'],
+                    event.target.value as MediaItem['type'],
                 }),
               )
             }
           >
-            <option value="image">
+            <option value="photo">
               이미지
             </option>
 
@@ -1003,7 +978,6 @@ function MediaModal({
               setState(
                 (current) => ({
                   ...current,
-
                   description:
                     event.target.value,
                 }),
@@ -1022,7 +996,6 @@ function MediaModal({
               setState(
                 (current) => ({
                   ...current,
-
                   external_url:
                     event.target.value,
                 }),
@@ -1042,10 +1015,8 @@ function MediaModal({
               setState(
                 (current) => ({
                   ...current,
-
                   status:
-                    event.target
-                      .value as MediaFormValue['status'],
+                    event.target.value as MediaItem['status'],
                 }),
               )
             }
