@@ -28,6 +28,53 @@ import {
   getErrorMessage,
 } from '../../lib/errors'
 
+type Organization = {
+  id: string
+  name: string
+  type: string
+  status: string
+  description?: string | null
+}
+
+type Member = {
+  id: string
+  display_name: string
+  status: string
+}
+
+type Membership = {
+  id: string
+  user_id: string
+  organization_id: string
+  status: 'active' | 'pending' | 'removed'
+  left_at?: string | null
+}
+
+type OrganizationFormValue = {
+  type:
+    | 'team'
+    | 'small_group'
+    | 'club'
+    | 'volunteer_team'
+  name: string
+  description: string
+  parent_organization_id:
+    | string
+    | null
+}
+
+type MembershipFormValue = {
+  membership: true
+  organization_id: string
+  user_id: string
+  status: 'active' | 'pending'
+}
+
+type CreateState =
+  | false
+  | OrganizationFormValue
+  | MembershipFormValue
+
 export function TeamsPage() {
   const {
     context,
@@ -36,33 +83,38 @@ export function TeamsPage() {
 
   const qc = useQueryClient()
 
+  const organizations =
+    (context?.organizations ??
+      []) as Organization[]
+
+  const orgs =
+    organizations.filter(
+      (organization) =>
+        organization.status ===
+        'active',
+    )
+
+  const initialOrganization =
+    context?.memberships.find(
+      (membership) =>
+        membership.status ===
+        'active',
+    )?.organization_id
+
   const [
     selected,
     setSelected,
   ] = useState<
     string | undefined
-  >(
-    context?.memberships.find(
-      (membership) =>
-        membership.status ===
-        'active',
-    )?.organization_id,
-  )
+  >(initialOrganization)
 
   const [
     create,
     setCreate,
-  ] = useState<any>(false)
+  ] = useState<CreateState>(false)
 
   const [error, setError] =
     useState('')
-
-  const orgs =
-    context?.organizations.filter(
-      (organization) =>
-        organization.status ===
-        'active',
-    ) ?? []
 
   const selectedOrg =
     orgs.find(
@@ -74,53 +126,78 @@ export function TeamsPage() {
   const {
     data: members = [],
     isLoading,
-  } = useQuery({
+  } = useQuery<Member[], Error>({
     queryKey: [
       'members',
       selected,
     ],
-    queryFn: () =>
-      selected
-        ? api.profiles.visible(
+    queryFn: async () => {
+      if (!selected) {
+        return []
+      }
+
+      const result =
+        await Promise.resolve(
+          api.profiles.visible(
             selected,
-          )
-        : Promise.resolve([]),
+          ),
+        )
+
+      return result as Member[]
+    },
     enabled: !!selected,
   })
 
   const {
     data: memberships = [],
-  } = useQuery({
+  } = useQuery<Membership[], Error>({
     queryKey: [
       'memberships',
       selected,
     ],
-    queryFn: () =>
-      selected
-        ? api.memberships.list(
+    queryFn: async () => {
+      if (!selected) {
+        return []
+      }
+
+      const result =
+        await Promise.resolve(
+          api.memberships.list(
             selected,
-          )
-        : Promise.resolve([]),
+          ),
+        )
+
+      return result as Membership[]
+    },
     enabled: !!selected,
   })
 
-  const save = async (
-    value: any,
-  ) => {
-    try {
-      await api.organizations.create(
-        value,
-      )
+  const saveOrganization =
+    async (
+      value: OrganizationFormValue,
+    ) => {
+      try {
+        await api.organizations.create(
+          value,
+        )
 
-      await refresh()
+        await refresh()
 
-      setCreate(false)
-    } catch (e) {
-      setError(
-        getErrorMessage(e),
-      )
+        await qc.invalidateQueries({
+          queryKey: ['members'],
+        })
+
+        await qc.invalidateQueries({
+          queryKey: ['memberships'],
+        })
+
+        setCreate(false)
+      } catch (e) {
+        setError(
+          getErrorMessage(e),
+        )
+      }
     }
-  }
 
   const updateMembership =
     async (
@@ -160,6 +237,16 @@ export function TeamsPage() {
         )
       }
     }
+
+  const canManageMembership =
+    selectedOrg
+      ? isAdmin(context) ||
+        canPermission(
+          context,
+          'membership.manage',
+          selectedOrg.id,
+        )
+      : false
 
   return (
     <div className="stack-lg">
@@ -202,11 +289,12 @@ export function TeamsPage() {
             내가 접근 가능한 조직
           </h2>
 
-          {orgs.length ? (
+          {orgs.length > 0 ? (
             <div className="list">
               {orgs.map(
                 (organization) => (
                   <button
+                    type="button"
                     className={`org-item ${
                       selected ===
                       organization.id
@@ -267,14 +355,7 @@ export function TeamsPage() {
                   </p>
                 </div>
 
-                {(isAdmin(
-                  context,
-                ) ||
-                  canPermission(
-                    context,
-                    'membership.manage',
-                    selectedOrg.id,
-                  )) && (
+                {canManageMembership && (
                   <Button
                     variant="secondary"
                     onClick={() =>
@@ -310,7 +391,7 @@ export function TeamsPage() {
 
               {isLoading ? (
                 <Spinner />
-              ) : members.length ? (
+              ) : members.length > 0 ? (
                 <div className="member-grid">
                   {members.map(
                     (member) => {
@@ -329,10 +410,12 @@ export function TeamsPage() {
                           }
                         >
                           <div className="avatar large">
-                            {member.display_name.slice(
-                              0,
-                              1,
-                            )}
+                            {member.display_name
+                              .trim()
+                              .slice(
+                                0,
+                                1,
+                              ) || '회'}
                           </div>
 
                           <div>
@@ -350,18 +433,11 @@ export function TeamsPage() {
                           </div>
 
                           {membership &&
-                            (isAdmin(
-                              context,
-                            ) ||
-                              canPermission(
-                                context,
-                                'membership.manage',
-                                selectedOrg.id,
-                              )) && (
+                            canManageMembership && (
                               <Button
                                 variant="ghost"
                                 onClick={() =>
-                                  updateMembership(
+                                  void updateMembership(
                                     membership.id,
                                     membership.status ===
                                       'removed'
@@ -395,7 +471,8 @@ export function TeamsPage() {
         </Card>
       </div>
 
-      {create?.membership ? (
+      {create &&
+      'membership' in create ? (
         <MembershipModal
           value={create}
           onClose={() =>
@@ -437,18 +514,16 @@ export function TeamsPage() {
             }
           }}
         />
-      ) : (
-        create && (
-          <OrganizationModal
-            value={create}
-            organizations={orgs}
-            onClose={() =>
-              setCreate(false)
-            }
-            onSave={save}
-          />
-        )
-      )}
+      ) : create ? (
+        <OrganizationModal
+          value={create}
+          organizations={orgs}
+          onClose={() =>
+            setCreate(false)
+          }
+          onSave={saveOrganization}
+        />
+      ) : null}
     </div>
   )
 }
@@ -459,15 +534,24 @@ function OrganizationModal({
   onClose,
   onSave,
 }: {
-  value: any
-  organizations: any[]
+  value: OrganizationFormValue
+  organizations: Organization[]
   onClose: () => void
   onSave: (
-    value: any,
+    value: OrganizationFormValue,
   ) => Promise<void>
 }) {
   const [state, setState] =
-    useState(value)
+    useState<OrganizationFormValue>(
+      value,
+    )
+
+  const teamOrganizations =
+    organizations.filter(
+      (organization) =>
+        organization.type ===
+        'team',
+    )
 
   return (
     <Modal
@@ -484,39 +568,46 @@ function OrganizationModal({
         <Field label="유형">
           <Select
             value={state.type}
-            onChange={(event) =>
-              setState({
-                ...state,
-                type:
-                  event.target.value,
-                parent_organization_id:
-                  event.target
-                    .value ===
-                  'small_group'
-                    ? organizations.find(
-                        (organization) =>
-                          organization.type ===
-                          'team',
-                      )?.id ?? null
-                    : null,
-              })
-            }
-          >
-            {[
-              'team',
-              'small_group',
-              'club',
-              'volunteer_team',
-            ].map((type) => (
-              <option
-                key={type}
-                value={type}
-              >
-                {organizationTypeLabel(
+            onChange={(event) => {
+              const type =
+                event.target.value as OrganizationFormValue['type']
+
+              setState(
+                (current) => ({
+                  ...current,
                   type,
-                )}
-              </option>
-            ))}
+                  parent_organization_id:
+                    type ===
+                    'small_group'
+                      ? current.parent_organization_id
+                      : null,
+                }),
+              )
+            }}
+          >
+            <option value="team">
+              {organizationTypeLabel(
+                'team',
+              )}
+            </option>
+
+            <option value="small_group">
+              {organizationTypeLabel(
+                'small_group',
+              )}
+            </option>
+
+            <option value="club">
+              {organizationTypeLabel(
+                'club',
+              )}
+            </option>
+
+            <option value="volunteer_team">
+              {organizationTypeLabel(
+                'volunteer_team',
+              )}
+            </option>
           </Select>
         </Field>
 
@@ -525,15 +616,19 @@ function OrganizationModal({
           <Field label="상위 팀">
             <Select
               value={
-                state.parent_organization_id ||
+                state.parent_organization_id ??
                 ''
               }
               onChange={(event) =>
-                setState({
-                  ...state,
-                  parent_organization_id:
-                    event.target.value,
-                })
+                setState(
+                  (current) => ({
+                    ...current,
+                    parent_organization_id:
+                      event.target
+                        .value ||
+                      null,
+                  }),
+                )
               }
               required
             >
@@ -541,28 +636,22 @@ function OrganizationModal({
                 선택
               </option>
 
-              {organizations
-                .filter(
-                  (organization) =>
-                    organization.type ===
-                    'team',
-                )
-                .map(
-                  (organization) => (
-                    <option
-                      key={
-                        organization.id
-                      }
-                      value={
-                        organization.id
-                      }
-                    >
-                      {
-                        organization.name
-                      }
-                    </option>
-                  ),
-                )}
+              {teamOrganizations.map(
+                (organization) => (
+                  <option
+                    key={
+                      organization.id
+                    }
+                    value={
+                      organization.id
+                    }
+                  >
+                    {
+                      organization.name
+                    }
+                  </option>
+                ),
+              )}
             </Select>
           </Field>
         )}
@@ -571,11 +660,13 @@ function OrganizationModal({
           <Input
             value={state.name}
             onChange={(event) =>
-              setState({
-                ...state,
-                name:
-                  event.target.value,
-              })
+              setState(
+                (current) => ({
+                  ...current,
+                  name:
+                    event.target.value,
+                }),
+              )
             }
             required
             maxLength={100}
@@ -585,16 +676,18 @@ function OrganizationModal({
         <Field label="설명">
           <Input
             value={
-              state.description ||
-              ''
+              state.description
             }
             onChange={(event) =>
-              setState({
-                ...state,
-                description:
-                  event.target.value,
-              })
+              setState(
+                (current) => ({
+                  ...current,
+                  description:
+                    event.target.value,
+                }),
+              )
             }
+            maxLength={500}
           />
         </Field>
 
@@ -607,7 +700,7 @@ function OrganizationModal({
             취소
           </Button>
 
-          <Button>
+          <Button type="submit">
             생성
           </Button>
         </div>
@@ -621,14 +714,16 @@ function MembershipModal({
   onClose,
   onSave,
 }: {
-  value: any
+  value: MembershipFormValue
   onClose: () => void
   onSave: (
-    value: any,
+    value: MembershipFormValue,
   ) => Promise<void>
 }) {
   const [state, setState] =
-    useState(value)
+    useState<MembershipFormValue>(
+      value,
+    )
 
   return (
     <Modal
@@ -654,11 +749,13 @@ function MembershipModal({
           <Input
             value={state.user_id}
             onChange={(event) =>
-              setState({
-                ...state,
-                user_id:
-                  event.target.value,
-              })
+              setState(
+                (current) => ({
+                  ...current,
+                  user_id:
+                    event.target.value,
+                }),
+              )
             }
             required
             placeholder="UUID"
@@ -669,11 +766,17 @@ function MembershipModal({
           <Select
             value={state.status}
             onChange={(event) =>
-              setState({
-                ...state,
-                status:
-                  event.target.value,
-              })
+              setState(
+                (current) => ({
+                  ...current,
+                  status:
+                    event.target
+                      .value ===
+                    'pending'
+                      ? 'pending'
+                      : 'active',
+                }),
+              )
             }
           >
             <option value="active">
@@ -695,7 +798,7 @@ function MembershipModal({
             취소
           </Button>
 
-          <Button>
+          <Button type="submit">
             추가
           </Button>
         </div>
