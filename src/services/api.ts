@@ -21,6 +21,10 @@ import type {
   VisibleProfile,
   WorshipService,
 } from '../types/domain'
+import type {
+  MediaCreateInput,
+  MediaUpdateInput,
+} from '../types/media'
 
 type TableName =
   | 'organizations'
@@ -49,13 +53,16 @@ async function select<T>(
   table: TableName,
   query?: (builder: any) => any,
 ): Promise<T[]> {
-  let builder = supabase.from(table).select('*')
+  let builder = supabase
+    .from(table)
+    .select('*')
 
   if (query) {
     builder = query(builder)
   }
 
-  const { data, error } = await builder
+  const { data, error } =
+    await builder
 
   if (error) {
     throw error
@@ -70,10 +77,11 @@ async function insert<T>(
     | Record<string, unknown>
     | Record<string, unknown>[],
 ): Promise<T[]> {
-  const { data, error } = await supabase
-    .from(table)
-    .insert(payload)
-    .select('*')
+  const { data, error } =
+    await supabase
+      .from(table)
+      .insert(payload)
+      .select('*')
 
   if (error) {
     throw error
@@ -88,9 +96,10 @@ async function insertNoSelect(
     | Record<string, unknown>
     | Record<string, unknown>[],
 ): Promise<void> {
-  const { error } = await supabase
-    .from(table)
-    .insert(payload)
+  const { error } =
+    await supabase
+      .from(table)
+      .insert(payload)
 
   if (error) {
     throw error
@@ -102,9 +111,12 @@ async function update<T>(
   values: Record<string, unknown>,
   query: (builder: any) => any,
 ): Promise<T[]> {
-  const { data, error } = await query(
-    supabase.from(table).update(values),
-  ).select('*')
+  const { data, error } =
+    await query(
+      supabase
+        .from(table)
+        .update(values),
+    ).select('*')
 
   if (error) {
     throw error
@@ -117,9 +129,10 @@ async function remove(
   table: TableName,
   query: (builder: any) => any,
 ): Promise<void> {
-  const { error } = await query(
-    supabase.from(table).delete(),
-  )
+  const { error } =
+    await query(
+      supabase.from(table).delete(),
+    )
 
   if (error) {
     throw error
@@ -143,7 +156,8 @@ export const api = {
 
       select<Organization>(
         'organizations',
-        (query) => query.order('name'),
+        (query) =>
+          query.order('name'),
       ),
 
       select<Membership>(
@@ -157,18 +171,22 @@ export const api = {
       select<RoleAssignment>(
         'role_assignments',
         (query) =>
-          query
-            .eq('user_id', userId),
+          query.eq(
+            'user_id',
+            userId,
+          ),
       ),
 
       select<Role>(
         'roles',
-        (query) => query.order('name'),
+        (query) =>
+          query.order('name'),
       ),
 
       select<Permission>(
         'permissions',
-        (query) => query.order('key'),
+        (query) =>
+          query.order('key'),
       ),
 
       select<RolePermission>(
@@ -181,7 +199,9 @@ export const api = {
     }
 
     return {
-      profile: (profile ?? null) as Profile | null,
+      profile:
+        (profile ??
+          null) as Profile | null,
       organizations,
       memberships,
       assignments,
@@ -197,7 +217,10 @@ export const api = {
         'organizations',
         (query) =>
           query
-            .eq('status', 'active')
+            .eq(
+              'status',
+              'active',
+            )
             .order('type')
             .order('name'),
       ),
@@ -221,26 +244,70 @@ export const api = {
       values: Partial<
         Pick<
           Organization,
-          'name' | 'description' | 'status'
+          | 'name'
+          | 'description'
+          | 'status'
         >
       >,
     ) =>
       update<Organization>(
         'organizations',
         values,
-        (query) => query.eq('id', id),
+        (query) =>
+          query.eq('id', id),
       ),
 
-    archive: (id: string) =>
-      update<Organization>(
+    delete: (id: string) =>
+      remove(
         'organizations',
-        { status: 'archived' },
-        (query) => query.eq('id', id),
+        (query) =>
+          query.eq('id', id),
+      ),
+  },
+
+  profiles: {
+    visible: (
+      organizationId: string,
+    ) =>
+      select<VisibleProfile>(
+        'profiles',
+        (query) =>
+          query
+            .eq(
+              'status',
+              'active',
+            )
+            .order(
+              'display_name',
+            ),
+      ),
+
+    updateSelf: (
+      values: Partial<
+        Pick<
+          Profile,
+          | 'display_name'
+          | 'profile_image_path'
+          | 'birth_date'
+          | 'phone'
+        >
+      >,
+    ) =>
+      update<Profile>(
+        'profiles',
+        values,
+        (query) =>
+          query.eq(
+            'id',
+            values.id,
+          ),
       ),
   },
 
   memberships: {
-    list: (organizationId: string) =>
+    list: (
+      organizationId: string,
+    ) =>
       select<Membership>(
         'organization_memberships',
         (query) =>
@@ -249,24 +316,26 @@ export const api = {
               'organization_id',
               organizationId,
             )
-            .order('joined_at'),
-      ),
-
-    mine: () =>
-      select<Membership>(
-        'organization_memberships',
-        (query) => query.order('joined_at'),
+            .order(
+              'created_at',
+              {
+                ascending: true,
+              },
+            ),
       ),
 
     add: (
       organizationId: string,
       userId: string,
-      status: 'active' | 'pending' = 'active',
+      status:
+        | 'active'
+        | 'pending' = 'active',
     ) =>
       insert<Membership>(
         'organization_memberships',
         {
-          organization_id: organizationId,
+          organization_id:
+            organizationId,
           user_id: userId,
           status,
         },
@@ -275,84 +344,61 @@ export const api = {
     update: (
       id: string,
       values: Partial<
-        Pick<Membership, 'status' | 'left_at'>
+        Pick<
+          Membership,
+          'status' | 'left_at'
+        >
       >,
     ) =>
       update<Membership>(
         'organization_memberships',
         values,
-        (query) => query.eq('id', id),
+        (query) =>
+          query.eq(
+            'id',
+            id,
+          ),
       ),
-
-    remove: (id: string) =>
-      api.memberships.update(id, {
-        status: 'removed',
-        left_at: new Date().toISOString(),
-      }),
-  },
-
-  profiles: {
-    visible: async (
-      organizationId: string,
-    ) => {
-      const { data, error } =
-        await supabase.rpc(
-          'get_visible_profiles',
-          {
-            p_organization_id:
-              organizationId,
-          },
-        )
-
-      if (error) {
-        throw error
-      }
-
-      return (data ?? []) as VisibleProfile[]
-    },
-
-    updateSelf: async (
-      values: Partial<
-        Pick<
-          Profile,
-          | 'display_name'
-          | 'birth_date'
-          | 'phone'
-          | 'profile_image_path'
-        >
-      >,
-    ) => {
-      const userId = (
-        await supabase.auth.getUser()
-      ).data.user?.id
-
-      const { error } = await supabase
-        .from('profiles')
-        .update(values)
-        .eq('id', userId)
-
-      if (error) {
-        throw error
-      }
-
-      return values
-    },
   },
 
   roles: {
-    assignments: () =>
+    list: () =>
+      select<Role>(
+        'roles',
+        (query) =>
+          query.order('name'),
+      ),
+  },
+
+  permissions: {
+    list: () =>
+      select<Permission>(
+        'permissions',
+        (query) =>
+          query.order('key'),
+      ),
+  },
+
+  roleAssignments: {
+    list: () =>
       select<RoleAssignment>(
         'role_assignments',
         (query) =>
-          query.order('created_at', {
-            ascending: false,
-          }),
+          query.order(
+            'created_at',
+            {
+              ascending: false,
+            },
+          ),
       ),
 
-    assign: (
+    create: (
       values: Pick<
         RoleAssignment,
-        'user_id' | 'role_id' | 'organization_id'
+        | 'user_id'
+        | 'role_id'
+        | 'organization_id'
+        | 'assigned_by'
       >,
     ) =>
       insert<RoleAssignment>(
@@ -360,167 +406,55 @@ export const api = {
         values,
       ),
 
-    remove: (id: string) =>
+    delete: (id: string) =>
       remove(
         'role_assignments',
-        (query) => query.eq('id', id),
-      ),
-  },
-
-  announcements: {
-    list: (organizationId?: string) =>
-      select<Announcement>(
-        'announcements',
-        (query) => {
-          const ordered = query
-            .order('is_pinned', {
-              ascending: false,
-            })
-            .order('created_at', {
-              ascending: false,
-            })
-
-          return organizationId
-            ? ordered.or(
-                `organization_id.eq.${organizationId},organization_id.is.null`,
-              )
-            : ordered
-        },
-      ),
-
-    create: (values: Partial<Announcement>) =>
-      insert<Announcement>(
-        'announcements',
-        values,
-      ),
-
-    update: (
-      id: string,
-      values: Partial<Announcement>,
-    ) =>
-      update<Announcement>(
-        'announcements',
-        values,
-        (query) => query.eq('id', id),
-      ),
-
-    delete: (id: string) =>
-      remove(
-        'announcements',
-        (query) => query.eq('id', id),
-      ),
-
-    markRead: async (
-      announcementId: string,
-      userId: string,
-    ) => {
-      const { error } = await supabase
-        .from('announcement_reads')
-        .upsert({
-          announcement_id: announcementId,
-          user_id: userId,
-        })
-
-      if (error) {
-        throw error
-      }
-    },
-
-    reads: () =>
-      select<AnnouncementRead>(
-        'announcement_reads',
-      ),
-  },
-
-  events: {
-    list: (organizationId?: string) =>
-      select<Event>(
-        'events',
-        (query) => {
-          const ordered = query.order(
-            'starts_at',
-            { ascending: true },
-          )
-
-          return organizationId
-            ? ordered.or(
-                `organization_id.eq.${organizationId},organization_id.is.null`,
-              )
-            : ordered
-        },
-      ),
-
-    create: (values: Partial<Event>) =>
-      insert<Event>('events', values),
-
-    update: (
-      id: string,
-      values: Partial<Event>,
-    ) =>
-      update<Event>(
-        'events',
-        values,
-        (query) => query.eq('id', id),
-      ),
-
-    delete: (id: string) =>
-      remove(
-        'events',
-        (query) => query.eq('id', id),
-      ),
-
-    participants: (eventId: string) =>
-      select<EventParticipant>(
-        'event_participants',
         (query) =>
-          query.eq('event_id', eventId),
+          query.eq(
+            'id',
+            id,
+          ),
       ),
-
-    register: async (eventId: string) => {
-      const { data, error } =
-        await supabase.rpc(
-          'register_for_event',
-          {
-            p_event_id: eventId,
-          },
-        )
-
-      if (error) {
-        throw error
-      }
-
-      return data as EventParticipant
-    },
-
-    cancel: async (eventId: string) => {
-      const { data, error } =
-        await supabase.rpc(
-          'cancel_event_registration',
-          {
-            p_event_id: eventId,
-          },
-        )
-
-      if (error) {
-        throw error
-      }
-
-      return data as EventParticipant
-    },
   },
 
-  worship: {
+  rolePermissions: {
     list: () =>
+      select<RolePermission>(
+        'role_permissions',
+      ),
+  },
+
+  worshipServices: {
+    list: (
+      organizationId?: string,
+    ) =>
       select<WorshipService>(
         'worship_services',
-        (query) =>
-          query.order('starts_at', {
-            ascending: false,
-          }),
+        (query) => {
+          const ordered =
+            query.order(
+              'starts_at',
+              {
+                ascending: true,
+              },
+            )
+
+          return organizationId
+            ? ordered.eq(
+                'organization_id',
+                organizationId,
+              )
+            : ordered
+        },
       ),
 
     create: (
-      values: Partial<WorshipService>,
+      values: Omit<
+        WorshipService,
+        | 'id'
+        | 'created_at'
+        | 'updated_at'
+      >,
     ) =>
       insert<WorshipService>(
         'worship_services',
@@ -529,152 +463,395 @@ export const api = {
 
     update: (
       id: string,
-      values: Partial<WorshipService>,
+      values: Partial<
+        Omit<
+          WorshipService,
+          | 'id'
+          | 'created_at'
+          | 'updated_at'
+        >
+      >,
     ) =>
       update<WorshipService>(
         'worship_services',
         values,
-        (query) => query.eq('id', id),
+        (query) =>
+          query.eq(
+            'id',
+            id,
+          ),
       ),
 
     delete: (id: string) =>
       remove(
         'worship_services',
-        (query) => query.eq('id', id),
+        (query) =>
+          query.eq(
+            'id',
+            id,
+          ),
+      ),
+  },
+
+  events: {
+    list: (
+      organizationId?: string,
+    ) =>
+      select<Event>(
+        'events',
+        (query) => {
+          const ordered =
+            query.order(
+              'starts_at',
+              {
+                ascending: true,
+              },
+            )
+
+          return organizationId
+            ? ordered.eq(
+                'organization_id',
+                organizationId,
+              )
+            : ordered
+        },
+      ),
+
+    create: (
+      values: Omit<
+        Event,
+        | 'id'
+        | 'created_at'
+        | 'updated_at'
+      >,
+    ) =>
+      insert<Event>(
+        'events',
+        values,
+      ),
+
+    update: (
+      id: string,
+      values: Partial<
+        Omit<
+          Event,
+          | 'id'
+          | 'created_at'
+          | 'updated_at'
+        >
+      >,
+    ) =>
+      update<Event>(
+        'events',
+        values,
+        (query) =>
+          query.eq(
+            'id',
+            id,
+          ),
+      ),
+
+    delete: (id: string) =>
+      remove(
+        'events',
+        (query) =>
+          query.eq(
+            'id',
+            id,
+          ),
+      ),
+  },
+
+  participants: {
+    list: (
+      eventId: string,
+    ) =>
+      select<EventParticipant>(
+        'event_participants',
+        (query) =>
+          query
+            .eq(
+              'event_id',
+              eventId,
+            )
+            .order(
+              'registered_at',
+            ),
+      ),
+
+    add: (
+      eventId: string,
+      userId: string,
+    ) =>
+      insert<EventParticipant>(
+        'event_participants',
+        {
+          event_id: eventId,
+          user_id: userId,
+        },
+      ),
+
+    remove: (
+      eventId: string,
+      userId: string,
+    ) =>
+      remove(
+        'event_participants',
+        (query) =>
+          query
+            .eq(
+              'event_id',
+              eventId,
+            )
+            .eq(
+              'user_id',
+              userId,
+            ),
       ),
   },
 
   attendance: {
-    list: () =>
+    list: (
+      eventId?: string,
+      worshipServiceId?: string,
+    ) =>
       select<AttendanceRecord>(
         'attendance_records',
-        (query) =>
-          query.order('created_at', {
-            ascending: false,
-          }),
+        (query) => {
+          let next =
+            query.order(
+              'created_at',
+              {
+                ascending: false,
+              },
+            )
+
+          if (eventId) {
+            next = next.eq(
+              'event_id',
+              eventId,
+            )
+          }
+
+          if (worshipServiceId) {
+            next =
+              next.eq(
+                'worship_service_id',
+                worshipServiceId,
+              )
+          }
+
+          return next
+        },
       ),
 
-    requests: () =>
+    create: (
+      values: Omit<
+        AttendanceRecord,
+        | 'id'
+        | 'created_at'
+        | 'updated_at'
+      >,
+    ) =>
+      insert<AttendanceRecord>(
+        'attendance_records',
+        values,
+      ),
+
+    update: (
+      id: string,
+      values: Partial<
+        Pick<
+          AttendanceRecord,
+          | 'status'
+          | 'note'
+          | 'processed_by'
+          | 'processed_at'
+        >
+      >,
+    ) =>
+      update<AttendanceRecord>(
+        'attendance_records',
+        values,
+        (query) =>
+          query.eq(
+            'id',
+            id,
+          ),
+      ),
+  },
+
+  attendanceCorrections: {
+    list: () =>
       select<AttendanceCorrectionRequest>(
         'attendance_correction_requests',
         (query) =>
-          query.order('created_at', {
-            ascending: false,
-          }),
+          query.order(
+            'created_at',
+            {
+              ascending: false,
+            },
+          ),
       ),
 
-    set: async (values: {
-      userId: string
-      status: string
-      eventId?: string
-      worshipServiceId?: string
-      note?: string
-    }) => {
-      const { data, error } =
-        await supabase.rpc(
-          'set_attendance',
-          {
-            p_user_id: values.userId,
-            p_status: values.status,
-            p_event_id:
-              values.eventId ?? null,
-            p_worship_service_id:
-              values.worshipServiceId ?? null,
-            p_note:
-              values.note ?? null,
-          },
-        )
+    create: (
+      values: Pick<
+        AttendanceCorrectionRequest,
+        | 'attendance_record_id'
+        | 'requester_id'
+        | 'original_status'
+        | 'requested_status'
+        | 'reason'
+      >,
+    ) =>
+      insert<AttendanceCorrectionRequest>(
+        'attendance_correction_requests',
+        values,
+      ),
 
-      if (error) {
-        throw error
-      }
+    update: (
+      id: string,
+      values: Partial<
+        Pick<
+          AttendanceCorrectionRequest,
+          | 'status'
+          | 'reviewed_by'
+          | 'reviewed_at'
+          | 'reviewer_note'
+        >
+      >,
+    ) =>
+      update<AttendanceCorrectionRequest>(
+        'attendance_correction_requests',
+        values,
+        (query) =>
+          query.eq(
+            'id',
+            id,
+          ),
+      ),
+  },
 
-      return data as AttendanceRecord
-    },
+  announcements: {
+    list: (
+      organizationId?: string,
+    ) =>
+      select<Announcement>(
+        'announcements',
+        (query) => {
+          const ordered =
+            query
+              .order(
+                'is_pinned',
+                {
+                  ascending: false,
+                },
+              )
+              .order(
+                'created_at',
+                {
+                  ascending: false,
+                },
+              )
 
-    requestCorrection: async (
-      recordId: string,
-      requestedStatus: string,
-      reason: string,
-    ) => {
-      const { data, error } =
-        await supabase.rpc(
-          'request_attendance_correction',
-          {
-            p_attendance_record_id:
-              recordId,
-            p_requested_status:
-              requestedStatus,
-            p_reason: reason,
-          },
-        )
+          return organizationId
+            ? ordered.eq(
+                'organization_id',
+                organizationId,
+              )
+            : ordered
+        },
+      ),
 
-      if (error) {
-        throw error
-      }
+    create: (
+      values: Omit<
+        Announcement,
+        | 'id'
+        | 'created_at'
+        | 'updated_at'
+      >,
+    ) =>
+      insert<Announcement>(
+        'announcements',
+        values,
+      ),
 
-      return data as AttendanceCorrectionRequest
-    },
+    update: (
+      id: string,
+      values: Partial<
+        Omit<
+          Announcement,
+          | 'id'
+          | 'created_at'
+          | 'updated_at'
+        >
+      >,
+    ) =>
+      update<Announcement>(
+        'announcements',
+        values,
+        (query) =>
+          query.eq(
+            'id',
+            id,
+          ),
+      ),
 
-    reviewCorrection: async (
-      requestId: string,
-      decision: string,
-      reviewerNote?: string,
-    ) => {
-      const { data, error } =
-        await supabase.rpc(
-          'review_attendance_correction',
-          {
-            p_request_id: requestId,
-            p_decision: decision,
-            p_reviewer_note:
-              reviewerNote ?? null,
-          },
-        )
-
-      if (error) {
-        throw error
-      }
-
-      return data as AttendanceCorrectionRequest
-    },
+    delete: (id: string) =>
+      remove(
+        'announcements',
+        (query) =>
+          query.eq(
+            'id',
+            id,
+          ),
+      ),
   },
 
   prayers: {
     list: async (
       organizationId: string,
-    ): Promise<PrayerRequest[]> => {
-      const { data, error } =
-        await supabase.rpc(
-          'get_prayer_requests',
-          {
-            p_organization_id:
-              organizationId,
-          },
+    ) => {
+      const result =
+        await select<PrayerRequest>(
+          'prayer_requests',
+          (query) =>
+            query
+              .eq(
+                'organization_id',
+                organizationId,
+              )
+              .eq(
+                'status',
+                'published',
+              )
+              .order(
+                'created_at',
+                {
+                  ascending: false,
+                },
+              ),
         )
 
-      if (error) {
-        throw error
-      }
-
-      return (data ?? []) as PrayerRequest[]
+      return result
     },
 
-    create: async (
-      values: Partial<PrayerRequest> & {
+    create: (
+      values: Pick<
+        PrayerRequest,
+        | 'organization_id'
+        | 'title'
+        | 'body'
+        | 'visibility'
+        | 'is_anonymous'
+        | 'status'
+      > & {
         author_id: string
       },
-    ): Promise<void> => {
-      await insertNoSelect(
+    ) =>
+      insert<PrayerRequest>(
         'prayer_requests',
         values,
-      )
-    },
-
-    delete: (id: string) =>
-      remove(
-        'prayer_requests',
-        (query) => query.eq('id', id),
       ),
 
     react: async (
@@ -691,7 +868,10 @@ export const api = {
                 'prayer_request_id',
                 prayerRequestId,
               )
-              .eq('user_id', userId),
+              .eq(
+                'user_id',
+                userId,
+              ),
         )
       }
 
@@ -707,14 +887,19 @@ export const api = {
   },
 
   media: {
-    list: (organizationId?: string) =>
+    list: (
+      organizationId?: string,
+    ) =>
       select<MediaItem>(
         'media_items',
         (query) => {
-          const ordered = query.order(
-            'created_at',
-            { ascending: false },
-          )
+          const ordered =
+            query.order(
+              'created_at',
+              {
+                ascending: false,
+              },
+            )
 
           return organizationId
             ? ordered.or(
@@ -724,7 +909,9 @@ export const api = {
         },
       ),
 
-    create: (values: Partial<MediaItem>) =>
+    create: (
+      values: MediaCreateInput,
+    ) =>
       insert<MediaItem>(
         'media_items',
         values,
@@ -732,18 +919,26 @@ export const api = {
 
     update: (
       id: string,
-      values: Partial<MediaItem>,
+      values: MediaUpdateInput,
     ) =>
       update<MediaItem>(
         'media_items',
         values,
-        (query) => query.eq('id', id),
+        (query) =>
+          query.eq(
+            'id',
+            id,
+          ),
       ),
 
     delete: (id: string) =>
       remove(
         'media_items',
-        (query) => query.eq('id', id),
+        (query) =>
+          query.eq(
+            'id',
+            id,
+          ),
       ),
   },
 
@@ -756,7 +951,8 @@ export const api = {
         updated_at: string
       }>(
         'notification_settings',
-        (query) => query.order('key'),
+        (query) =>
+          query.order('key'),
       ),
 
     save: (
@@ -771,7 +967,11 @@ export const api = {
       }>(
         'notification_settings',
         { enabled },
-        (query) => query.eq('key', key),
+        (query) =>
+          query.eq(
+            'key',
+            key,
+          ),
       ),
   },
 
@@ -780,9 +980,12 @@ export const api = {
       select<Notification>(
         'notifications',
         (query) =>
-          query.order('created_at', {
-            ascending: false,
-          }),
+          query.order(
+            'created_at',
+            {
+              ascending: false,
+            },
+          ),
       ),
 
     markRead: (id: string) =>
@@ -791,9 +994,14 @@ export const api = {
         {
           read_at:
             new Date().toISOString(),
-          delivery_status: 'read',
+          delivery_status:
+            'read',
         },
-        (query) => query.eq('id', id),
+        (query) =>
+          query.eq(
+            'id',
+            id,
+          ),
       ),
 
     preferences: async (
@@ -805,7 +1013,10 @@ export const api = {
             'user_notification_preferences',
           )
           .select('*')
-          .eq('user_id', userId)
+          .eq(
+            'user_id',
+            userId,
+          )
           .maybeSingle()
 
       if (error) {
@@ -838,17 +1049,28 @@ export const api = {
       return data as UserNotificationPreferences
     },
 
-    devices: (userId: string) =>
+    devices: (
+      userId: string,
+    ) =>
       select<PushDevice>(
         'push_devices',
         (query) =>
-          query.eq('user_id', userId),
+          query.eq(
+            'user_id',
+            userId,
+          ),
       ),
 
-    removeDevice: (id: string) =>
+    removeDevice: (
+      id: string,
+    ) =>
       remove(
         'push_devices',
-        (query) => query.eq('id', id),
+        (query) =>
+          query.eq(
+            'id',
+            id,
+          ),
       ),
   },
 
@@ -857,23 +1079,31 @@ export const api = {
       userId: string,
       file: File,
     ) => {
-      const ext = file.name.includes('.')
-        ? file.name
-            .split('.')
-            .pop()
-            ?.toLowerCase()
-        : 'jpg'
+      const ext =
+        file.name.includes('.')
+          ? file.name
+              .split('.')
+              .pop()
+              ?.toLowerCase()
+          : 'jpg'
 
       const path = `profiles/${userId}/${crypto.randomUUID()}.${ext}`
 
       const { error } =
         await supabase.storage
-          .from('sdm-profile-images')
-          .upload(path, file, {
-            upsert: false,
-            contentType:
-              file.type || undefined,
-          })
+          .from(
+            'sdm-profile-images',
+          )
+          .upload(
+            path,
+            file,
+            {
+              upsert: false,
+              contentType:
+                file.type ||
+                undefined,
+            },
+          )
 
       if (error) {
         throw error
@@ -881,15 +1111,20 @@ export const api = {
 
       try {
         await api.profiles.updateSelf({
-          profile_image_path: path,
+          profile_image_path:
+            path,
         })
 
         return path
       } catch (cause) {
         await supabase.storage
-          .from('sdm-profile-images')
+          .from(
+            'sdm-profile-images',
+          )
           .remove([path])
-          .catch(() => undefined)
+          .catch(
+            () => undefined,
+          )
 
         throw cause
       }
@@ -899,23 +1134,29 @@ export const api = {
       organizationId: string,
       file: File,
     ) => {
-      const ext = file.name.includes('.')
-        ? file.name
-            .split('.')
-            .pop()
-            ?.toLowerCase()
-        : 'bin'
+      const ext =
+        file.name.includes('.')
+          ? file.name
+              .split('.')
+              .pop()
+              ?.toLowerCase()
+          : 'bin'
 
       const path = `media/${organizationId}/${crypto.randomUUID()}.${ext}`
 
       const { error } =
         await supabase.storage
           .from('sdm-media')
-          .upload(path, file, {
-            upsert: false,
-            contentType:
-              file.type || undefined,
-          })
+          .upload(
+            path,
+            file,
+            {
+              upsert: false,
+              contentType:
+                file.type ||
+                undefined,
+            },
+          )
 
       if (error) {
         throw error
@@ -924,8 +1165,10 @@ export const api = {
       return {
         path,
         bucket: 'sdm-media',
-        mime_type: file.type || null,
-        file_size_bytes: file.size,
+        mime_type:
+          file.type || null,
+        file_size_bytes:
+          file.size,
       }
     },
 
@@ -970,9 +1213,12 @@ export const api = {
         'audit_logs',
         (query) =>
           query
-            .order('created_at', {
-              ascending: false,
-            })
+            .order(
+              'created_at',
+              {
+                ascending: false,
+              },
+            )
             .limit(200),
       ),
   },
