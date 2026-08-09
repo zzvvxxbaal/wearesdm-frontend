@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Session } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabase'
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
+import { supabase, assertSupabaseConfigured } from '../lib/supabase'
 import { api } from '../services/api'
+import { getErrorMessage } from '../lib/errors'
 import type { AppContextData } from '../types/domain'
 
 interface AuthContextValue {
@@ -21,13 +22,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const generation = useRef(0)
-  const mounted = useRef(true)
 
   const load = useCallback(async (nextSession: Session | null) => {
     const run = ++generation.current
-
-    if (!mounted.current) return
-
     setSession(nextSession)
     setError(null)
 
@@ -38,51 +35,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setLoading(true)
-
     try {
+      assertSupabaseConfigured()
       const nextContext = await api.getContext(nextSession.user.id)
-      if (!mounted.current || run !== generation.current) return
+      if (run !== generation.current) return
       setContext(nextContext)
     } catch (cause) {
-      if (!mounted.current || run !== generation.current) return
+      if (run !== generation.current) return
       setContext(null)
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : '사용자 정보를 불러오지 못했습니다.',
-      )
+      setError(getErrorMessage(cause))
     } finally {
-      if (mounted.current && run === generation.current) {
-        setLoading(false)
-      }
+      if (run === generation.current) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    mounted.current = true
+    let active = true
 
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      void load(nextSession)
-    })
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (event: AuthChangeEvent, nextSession) => {
+        if (!active) return
 
-    void supabase.auth.getSession().then(({ data: sessionData, error: sessionError }) => {
-      if (!mounted.current) return
+        // Supabase invokes this callback while holding its internal auth lock.
+        // Defer DB work so a context query cannot deadlock token refresh/sign-out.
+        window.setTimeout(() => {
+          if (!active) return
+          if (event === 'TOKEN_REFRESHED') {
+            setSession(nextSession)
+            return
+          }
+          void load(nextSession)
+        }, 0)
+      },
+    )
+
+    void supabase.auth.getSession().then(({ data, error: sessionError }) => {
+      if (!active) return
       if (sessionError) {
-        setError(sessionError.message)
+        setError(getErrorMessage(sessionError))
         setLoading(false)
         return
       }
-      void load(sessionData.session)
+      void load(data.session)
     })
 
     return () => {
-      mounted.current = false
+      active = false
       generation.current += 1
-      data.subscription.unsubscribe()
+      listener.subscription.unsubscribe()
     }
   }, [load])
 
   const refresh = useCallback(async () => {
+    assertSupabaseConfigured()
     const { data, error: sessionError } = await supabase.auth.getSession()
     if (sessionError) throw sessionError
     await load(data.session)
