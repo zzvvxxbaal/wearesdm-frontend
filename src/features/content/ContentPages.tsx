@@ -1,8 +1,17 @@
-import { FormEvent, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  FormEvent,
+  useState,
+} from 'react'
+import {
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { api } from '../../services/api'
 import { useAuth } from '../../app/AuthProvider'
-import { canPermission, isAdmin } from '../../lib/permissions'
+import {
+  canPermission,
+  isAdmin,
+} from '../../lib/permissions'
 import {
   Button,
   Card,
@@ -18,38 +27,55 @@ import {
 } from '../../components/ui'
 import { formatDateTime } from '../../lib/format'
 import { getErrorMessage } from '../../lib/errors'
+import type { PrayerRequest } from '../../types/domain'
 
 export function PrayerPage() {
   const { context } = useAuth()
+  const authContext = context
 
-  const [orgId, setOrgId] = useState(
-    context?.memberships.find(
-      (membership) => membership.status === 'active',
-    )?.organization_id || '',
-  )
+  const [orgId, setOrgId] =
+    useState(
+      authContext?.memberships.find(
+        (membership) =>
+          membership.status ===
+          'active',
+      )?.organization_id || '',
+    )
 
-  const [create, setCreate] = useState(false)
-  const [error, setError] = useState('')
+  const [create, setCreate] =
+    useState(false)
+
+  const [error, setError] =
+    useState('')
 
   const qc = useQueryClient()
 
   const {
     data = [],
     isLoading,
-  } = useQuery({
-    queryKey: ['prayers', orgId],
-    queryFn: () => api.prayers.list(orgId),
-    enabled: !!orgId && !!context?.profile,
+  } = useQuery<PrayerRequest[]>({
+    queryKey: [
+      'prayers',
+      orgId,
+    ],
+    queryFn: () =>
+      api.prayers.list(orgId),
+    enabled:
+      !!orgId &&
+      !!authContext?.profile,
   })
 
-  if (!context?.profile) {
+  if (!authContext?.profile) {
     return <Spinner />
   }
 
   if (!orgId) {
     return (
       <Card>
-        <Empty>기도제목을 볼 조직이 없습니다.</Empty>
+        <Empty>
+          기도제목을 볼 조직이
+          없습니다.
+        </Empty>
       </Card>
     )
   }
@@ -59,41 +85,64 @@ export function PrayerPage() {
       <div className="page-header">
         <div>
           <h1>기도제목</h1>
-          <p>함께 기도하고 서로를 격려하세요.</p>
+          <p>
+            함께 기도하고 서로를
+            격려하세요.
+          </p>
         </div>
 
-        <Button onClick={() => setCreate(true)}>
+        <Button
+          onClick={() =>
+            setCreate(true)
+          }
+        >
           기도제목 작성
         </Button>
       </div>
 
-      {error && <ErrorBox message={error} />}
+      {error && (
+        <ErrorBox
+          message={error}
+        />
+      )}
 
       <Card>
         <Field label="조직">
           <Select
             value={orgId}
             onChange={(event) =>
-              setOrgId(event.target.value)
+              setOrgId(
+                event.target.value,
+              )
             }
           >
-            {context.organizations
-              .filter((organization) =>
-                context.memberships.some(
-                  (membership) =>
-                    membership.organization_id ===
-                      organization.id &&
-                    membership.status === 'active',
-                ),
+            {authContext.organizations
+              .filter(
+                (organization) =>
+                  authContext.memberships.some(
+                    (membership) =>
+                      membership.organization_id ===
+                        organization.id &&
+                      membership.status ===
+                        'active',
+                  ),
               )
-              .map((organization) => (
-                <option
-                  key={organization.id}
-                  value={organization.id}
-                >
-                  {organization.name}
-                </option>
-              ))}
+              .map(
+                (organization) => (
+                  <option
+                    key={
+                      organization.id
+                    }
+                    value={
+                      organization.id
+                    }
+                  >
+                    {
+                      organization.name
+                    }
+                  </option>
+                ),
+              )}
           </Select>
         </Field>
       </Card>
@@ -106,28 +155,42 @@ export function PrayerPage() {
             <PrayerCard
               key={prayer.id}
               prayer={prayer}
-              userId={context.profile.id}
+              userId={
+                authContext.profile.id
+              }
               onError={setError}
             />
           ))}
         </div>
       ) : (
         <Card>
-          <Empty>게시된 기도제목이 없습니다.</Empty>
+          <Empty>
+            게시된 기도제목이
+            없습니다.
+          </Empty>
         </Card>
       )}
 
       {create && (
         <PrayerModal
           organizationId={orgId}
-          userId={context.profile.id}
-          onClose={() => setCreate(false)}
+          userId={
+            authContext.profile.id
+          }
+          onClose={() =>
+            setCreate(false)
+          }
           onDone={async () => {
             setCreate(false)
 
-            await qc.invalidateQueries({
-              queryKey: ['prayers', orgId],
-            })
+            await qc.invalidateQueries(
+              {
+                queryKey: [
+                  'prayers',
+                  orgId,
+                ],
+              },
+            )
           }}
           onError={setError}
         />
@@ -143,17 +206,22 @@ function PrayerCard({
 }: {
   prayer: any
   userId: string
-  onError: (message: string) => void
+  onError: (
+    message: string,
+  ) => void
 }) {
-  const [reacted, setReacted] = useState(
-    prayer.reacted_by_me,
-  )
+  const [reacted, setReacted] =
+    useState(
+      prayer.reacted_by_me,
+    )
 
-  const [count, setCount] = useState(
-    prayer.reaction_count,
-  )
+  const [count, setCount] =
+    useState(
+      prayer.reaction_count,
+    )
 
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] =
+    useState(false)
 
   const toggle = async () => {
     setBusy(true)
@@ -166,9 +234,15 @@ function PrayerCard({
       )
 
       setReacted(!reacted)
-      setCount(count + (reacted ? -1 : 1))
+
+      setCount(
+        count +
+          (reacted ? -1 : 1),
+      )
     } catch (error) {
-      onError(getErrorMessage(error))
+      onError(
+        getErrorMessage(error),
+      )
     } finally {
       setBusy(false)
     }
@@ -179,29 +253,46 @@ function PrayerCard({
       <div className="article-head">
         <div>
           <Badge>
-            {prayer.visibility === 'public'
+            {prayer.visibility ===
+            'public'
               ? '공개'
               : '나만 보기'}
           </Badge>
 
-          <h2>{prayer.title || '기도제목'}</h2>
+          <h2>
+            {prayer.title ||
+              '기도제목'}
+          </h2>
 
           <small>
             {prayer.is_anonymous
               ? '익명'
-              : prayer.visible_author_name || '회원'}{' '}
-            · {formatDateTime(prayer.created_at)}
+              : prayer.visible_author_name ||
+                '회원'}{' '}
+            ·{' '}
+            {formatDateTime(
+              prayer.created_at,
+            )}
           </small>
         </div>
       </div>
 
-      <p className="article-body">{prayer.body}</p>
+      <p className="article-body">
+        {prayer.body}
+      </p>
 
-      {prayer.visibility === 'public' && (
+      {prayer.visibility ===
+        'public' && (
         <Button
-          variant={reacted ? 'primary' : 'secondary'}
+          variant={
+            reacted
+              ? 'primary'
+              : 'secondary'
+          }
           disabled={busy}
-          onClick={() => void toggle()}
+          onClick={() =>
+            void toggle()
+          }
         >
           🙏 {count}
         </Button>
@@ -221,38 +312,56 @@ function PrayerModal({
   userId: string
   onClose: () => void
   onDone: () => Promise<void>
-  onError: (message: string) => void
+  onError: (
+    message: string,
+  ) => void
 }) {
-  const [value, setValue] = useState<{
-    title: string
-    body: string
-    visibility: 'public' | 'private'
-    is_anonymous: boolean
-  }>({
-    title: '',
-    body: '',
-    visibility: 'public',
-    is_anonymous: false,
-  })
+  const [value, setValue] =
+    useState<{
+      title: string
+      body: string
+      visibility:
+        | 'public'
+        | 'private'
+      is_anonymous: boolean
+    }>({
+      title: '',
+      body: '',
+      visibility: 'public',
+      is_anonymous: false,
+    })
 
   return (
-    <Modal title="기도제목 작성" onClose={onClose}>
+    <Modal
+      title="기도제목 작성"
+      onClose={onClose}
+    >
       <form
         className="stack"
-        onSubmit={async (event) => {
+        onSubmit={async (
+          event,
+        ) => {
           event.preventDefault()
 
           try {
-            await api.prayers.create({
-              ...value,
-              organization_id: organizationId,
-              author_id: userId,
-              status: 'published',
-            })
+            await api.prayers.create(
+              {
+                ...value,
+                organization_id:
+                  organizationId,
+                author_id: userId,
+                status:
+                  'published',
+              },
+            )
 
             await onDone()
           } catch (error) {
-            onError(getErrorMessage(error))
+            onError(
+              getErrorMessage(
+                error,
+              ),
+            )
           }
         }}
       >
@@ -262,7 +371,8 @@ function PrayerModal({
             onChange={(event) =>
               setValue({
                 ...value,
-                title: event.target.value,
+                title:
+                  event.target.value,
               })
             }
           />
@@ -275,7 +385,8 @@ function PrayerModal({
             onChange={(event) =>
               setValue({
                 ...value,
-                body: event.target.value,
+                body:
+                  event.target.value,
               })
             }
             required
@@ -286,7 +397,9 @@ function PrayerModal({
         <div className="form-grid">
           <Field label="공개 범위">
             <Select
-              value={value.visibility}
+              value={
+                value.visibility
+              }
               onChange={(event) =>
                 setValue({
                   ...value,
@@ -300,6 +413,7 @@ function PrayerModal({
               <option value="public">
                 조직 공개
               </option>
+
               <option value="private">
                 나만 보기
               </option>
@@ -308,17 +422,26 @@ function PrayerModal({
 
           <Field label="익명">
             <Select
-              value={String(value.is_anonymous)}
+              value={String(
+                value.is_anonymous,
+              )}
               onChange={(event) =>
                 setValue({
                   ...value,
                   is_anonymous:
-                    event.target.value === 'true',
+                    event.target
+                      .value ===
+                    'true',
                 })
               }
             >
-              <option value="false">아니오</option>
-              <option value="true">예</option>
+              <option value="false">
+                아니오
+              </option>
+
+              <option value="true">
+                예
+              </option>
             </Select>
           </Field>
         </div>
@@ -332,7 +455,9 @@ function PrayerModal({
             취소
           </Button>
 
-          <Button>게시</Button>
+          <Button>
+            게시
+          </Button>
         </div>
       </form>
     </Modal>
@@ -342,9 +467,14 @@ function PrayerModal({
 export function MediaPage() {
   const { context } = useAuth()
 
-  const [orgId, setOrgId] = useState('all')
-  const [editing, setEditing] = useState<any>(null)
-  const [error, setError] = useState('')
+  const [orgId, setOrgId] =
+    useState('all')
+
+  const [editing, setEditing] =
+    useState<any>(null)
+
+  const [error, setError] =
+    useState('')
 
   const qc = useQueryClient()
 
@@ -352,16 +482,22 @@ export function MediaPage() {
     data = [],
     isLoading,
   } = useQuery({
-    queryKey: ['media', orgId],
+    queryKey: [
+      'media',
+      orgId,
+    ],
     queryFn: () =>
       api.media.list(
-        orgId === 'all' ? undefined : orgId,
+        orgId === 'all'
+          ? undefined
+          : orgId,
       ),
     enabled: !!context,
   })
 
   const manageable = (
-    context?.organizations ?? []
+    context?.organizations ??
+    []
   ).filter(
     (organization) =>
       isAdmin(context) ||
@@ -372,21 +508,32 @@ export function MediaPage() {
       ),
   )
 
-  const save = async (value: any) => {
+  const save = async (
+    value: any,
+  ) => {
     try {
       if (value.id) {
-        await api.media.update(value.id, value)
+        await api.media.update(
+          value.id,
+          value,
+        )
       } else {
-        await api.media.create(value)
+        await api.media.create(
+          value,
+        )
       }
 
-      await qc.invalidateQueries({
-        queryKey: ['media'],
-      })
+      await qc.invalidateQueries(
+        {
+          queryKey: ['media'],
+        },
+      )
 
       setEditing(null)
     } catch (error) {
-      setError(getErrorMessage(error))
+      setError(
+        getErrorMessage(error),
+      )
     }
   }
 
@@ -396,7 +543,8 @@ export function MediaPage() {
         <div>
           <h1>미디어</h1>
           <p>
-            사진, 영상, 오디오, 문서를 관리합니다.
+            사진, 영상, 오디오,
+            문서를 관리합니다.
           </p>
         </div>
 
@@ -404,12 +552,14 @@ export function MediaPage() {
           <Button
             onClick={() =>
               setEditing({
-                organization_id: manageable[0].id,
+                organization_id:
+                  manageable[0].id,
                 type: 'document',
                 title: '',
                 description: '',
                 external_url: '',
-                status: 'published',
+                status:
+                  'published',
               })
             }
           >
@@ -418,25 +568,39 @@ export function MediaPage() {
         )}
       </div>
 
-      {error && <ErrorBox message={error} />}
+      {error && (
+        <ErrorBox
+          message={error}
+        />
+      )}
 
       <Card>
         <Field label="조직">
           <Select
             value={orgId}
             onChange={(event) =>
-              setOrgId(event.target.value)
+              setOrgId(
+                event.target.value,
+              )
             }
           >
-            <option value="all">전체</option>
+            <option value="all">
+              전체
+            </option>
 
             {context?.organizations.map(
               (organization) => (
                 <option
-                  key={organization.id}
-                  value={organization.id}
+                  key={
+                    organization.id
+                  }
+                  value={
+                    organization.id
+                  }
                 >
-                  {organization.name}
+                  {
+                    organization.name
+                  }
                 </option>
               ),
             )}
@@ -450,15 +614,24 @@ export function MediaPage() {
         <div className="grid-3">
           {data.map((media) => (
             <Card key={media.id}>
-              <Badge>{media.type}</Badge>
+              <Badge>
+                {media.type}
+              </Badge>
 
-              <h2>{media.title}</h2>
+              <h2>
+                {media.title}
+              </h2>
 
-              <p>{media.description || ''}</p>
+              <p>
+                {media.description ||
+                  ''}
+              </p>
 
               {media.external_url && (
                 <a
-                  href={media.external_url}
+                  href={
+                    media.external_url
+                  }
                   target="_blank"
                   rel="noreferrer"
                   className="text-link"
@@ -469,7 +642,10 @@ export function MediaPage() {
 
               {media.storage_path && (
                 <p className="muted">
-                  스토리지: {media.storage_path}
+                  스토리지:{' '}
+                  {
+                    media.storage_path
+                  }
                 </p>
               )}
 
@@ -484,7 +660,9 @@ export function MediaPage() {
                   <Button
                     variant="secondary"
                     onClick={() =>
-                      setEditing(media)
+                      setEditing(
+                        media,
+                      )
                     }
                   >
                     수정
@@ -493,7 +671,11 @@ export function MediaPage() {
                   <Button
                     variant="danger"
                     onClick={async () => {
-                      if (!confirm('삭제할까요?')) {
+                      if (
+                        !confirm(
+                          '삭제할까요?',
+                        )
+                      ) {
                         return
                       }
 
@@ -502,12 +684,18 @@ export function MediaPage() {
                           media.id,
                         )
 
-                        await qc.invalidateQueries({
-                          queryKey: ['media'],
-                        })
+                        await qc.invalidateQueries(
+                          {
+                            queryKey: [
+                              'media',
+                            ],
+                          },
+                        )
                       } catch (error) {
                         setError(
-                          getErrorMessage(error),
+                          getErrorMessage(
+                            error,
+                          ),
                         )
                       }
                     }}
@@ -521,15 +709,22 @@ export function MediaPage() {
         </div>
       ) : (
         <Card>
-          <Empty>미디어가 없습니다.</Empty>
+          <Empty>
+            미디어가 없습니다.
+          </Empty>
         </Card>
       )}
 
       {editing && (
         <MediaModal
           value={editing}
-          organizations={manageable}
-          onClose={() => setEditing(null)}
+          organizations={
+            context?.organizations ??
+            []
+          }
+          onClose={() =>
+            setEditing(null)
+          }
           onSave={save}
         />
       )}
@@ -546,77 +741,35 @@ function MediaModal({
   value: any
   organizations: any[]
   onClose: () => void
-  onSave: (value: any) => Promise<void>
+  onSave: (
+    value: any,
+  ) => Promise<void>
 }) {
-  const [state, setState] = useState(value)
-  const [file, setFile] = useState<File | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault()
-
-    setBusy(true)
-    setError('')
-
-    let uploadedPath: string | null = null
-
-    try {
-      let next = { ...state }
-
-      if (file) {
-        if (file.size > 50 * 1024 * 1024) {
-          throw new Error(
-            '미디어 파일은 최대 50MB까지 업로드할 수 있습니다.',
-          )
-        }
-
-        const uploaded =
-          await api.storage.uploadMedia(
-            state.organization_id,
-            file,
-          )
-
-        uploadedPath = uploaded.path
-
-        next = {
-          ...next,
-          ...uploaded,
-          storage_path: uploaded.path,
-          storage_bucket: uploaded.bucket,
-          external_url: null,
-          status: state.status || 'published',
-        }
-      }
-
-      await onSave(next)
-    } catch (error) {
-      if (uploadedPath) {
-        await api.storage
-          .delete('sdm-media', uploadedPath)
-          .catch(() => undefined)
-      }
-
-      setError(getErrorMessage(error))
-    } finally {
-      setBusy(false)
-    }
-  }
+  const [state, setState] =
+    useState(value)
 
   return (
     <Modal
-      title={state.id ? '미디어 수정' : '미디어 추가'}
+      title={
+        state.id
+          ? '미디어 수정'
+          : '미디어 추가'
+      }
       onClose={onClose}
     >
       <form
         className="stack"
-        onSubmit={submit}
+        onSubmit={(event) => {
+          event.preventDefault()
+          void onSave(state)
+        }}
       >
-        {error && <ErrorBox message={error} />}
-
         <Field label="조직">
           <Select
-            value={state.organization_id || ''}
+            value={
+              state.organization_id ||
+              ''
+            }
             onChange={(event) =>
               setState({
                 ...state,
@@ -626,14 +779,26 @@ function MediaModal({
             }
             required
           >
-            {organizations.map((organization) => (
-              <option
-                key={organization.id}
-                value={organization.id}
-              >
-                {organization.name}
-              </option>
-            ))}
+            <option value="">
+              선택
+            </option>
+
+            {organizations.map(
+              (organization) => (
+                <option
+                  key={
+                    organization.id
+                  }
+                  value={
+                    organization.id
+                  }
+                >
+                  {
+                    organization.name
+                  }
+                </option>
+              ),
+            )}
           </Select>
         </Field>
 
@@ -643,20 +808,26 @@ function MediaModal({
             onChange={(event) =>
               setState({
                 ...state,
-                type: event.target.value,
+                type:
+                  event.target.value,
               })
             }
           >
-            {[
-              'video',
-              'photo',
-              'audio',
-              'document',
-            ].map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
+            <option value="image">
+              이미지
+            </option>
+
+            <option value="video">
+              영상
+            </option>
+
+            <option value="audio">
+              오디오
+            </option>
+
+            <option value="document">
+              문서
+            </option>
           </Select>
         </Field>
 
@@ -666,21 +837,25 @@ function MediaModal({
             onChange={(event) =>
               setState({
                 ...state,
-                title: event.target.value,
+                title:
+                  event.target.value,
               })
             }
             required
-            maxLength={200}
           />
         </Field>
 
         <Field label="설명">
           <Textarea
-            value={state.description || ''}
+            value={
+              state.description ||
+              ''
+            }
             onChange={(event) =>
               setState({
                 ...state,
-                description: event.target.value,
+                description:
+                  event.target.value,
               })
             }
           />
@@ -688,50 +863,46 @@ function MediaModal({
 
         <Field label="외부 URL">
           <Input
-            type="url"
-            value={state.external_url || ''}
+            value={
+              state.external_url ||
+              ''
+            }
             onChange={(event) =>
               setState({
                 ...state,
                 external_url:
                   event.target.value,
-                storage_path: null,
-                storage_bucket: null,
               })
             }
-            placeholder="https://..."
-          />
-        </Field>
-
-        <Field label="파일 업로드">
-          <Input
-            type="file"
-            onChange={(event) => {
-              setFile(
-                event.target.files?.[0] || null,
-              )
-
-              setState({
-                ...state,
-                external_url: null,
-              })
-            }}
+            type="url"
           />
         </Field>
 
         <Field label="상태">
           <Select
-            value={state.status}
+            value={
+              state.status ||
+              'published'
+            }
             onChange={(event) =>
               setState({
                 ...state,
-                status: event.target.value,
+                status:
+                  event.target.value,
               })
             }
           >
-            <option value="published">게시</option>
-            <option value="draft">임시저장</option>
-            <option value="archived">보관</option>
+            <option value="published">
+              게시
+            </option>
+
+            <option value="draft">
+              임시 저장
+            </option>
+
+            <option value="archived">
+              보관
+            </option>
           </Select>
         </Field>
 
@@ -744,7 +915,7 @@ function MediaModal({
             취소
           </Button>
 
-          <Button disabled={busy}>
+          <Button>
             저장
           </Button>
         </div>
