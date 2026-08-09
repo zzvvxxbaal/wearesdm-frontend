@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase'
+import { supabase, assertSupabaseConfigured } from '../lib/supabase'
 import type {
   Announcement,
   AnnouncementRead,
@@ -49,55 +49,41 @@ type TableName =
   | 'push_devices'
   | 'audit_logs'
 
+function assertId(value: string, label = 'ID') {
+  if (!value.trim()) throw new Error(`${label}가 없습니다.`)
+  return value.trim()
+}
+
 async function select<T>(
   table: TableName,
   query?: (builder: any) => any,
 ): Promise<T[]> {
+  assertSupabaseConfigured()
   let builder = supabase.from(table).select('*')
-
-  if (query) {
-    builder = query(builder)
-  }
+  if (query) builder = query(builder)
 
   const { data, error } = await builder
-
   if (error) throw error
   return (data ?? []) as T[]
 }
 
 async function insert<T>(
   table: TableName,
-  payload:
-    | Record<string, unknown>
-    | Record<string, unknown>[],
+  payload: Record<string, unknown> | Record<string, unknown>[],
 ): Promise<T[]> {
-  const { data, error } =
-    await supabase
-      .from(table)
-      .insert(payload)
-      .select('*')
+  assertSupabaseConfigured()
+  const rows = Array.isArray(payload) ? payload : [payload]
+  if (!rows.length) throw new Error('저장할 데이터가 없습니다.')
 
-  if (error) {
-    throw error
-  }
+  const { data, error } = await supabase
+    .from(table)
+    .insert(payload)
+    .select('*')
 
-  return (data ?? []) as T[]
-}
-
-async function insertNoSelect(
-  table: TableName,
-  payload:
-    | Record<string, unknown>
-    | Record<string, unknown>[],
-): Promise<void> {
-  const { error } =
-    await supabase
-      .from(table)
-      .insert(payload)
-
-  if (error) {
-    throw error
-  }
+  if (error) throw error
+  const result = (data ?? []) as T[]
+  if (!result.length) throw new Error('데이터 저장 결과를 확인할 수 없습니다.')
+  return result
 }
 
 async function update<T>(
@@ -105,36 +91,46 @@ async function update<T>(
   values: Record<string, unknown>,
   query: (builder: any) => any,
 ): Promise<T[]> {
-  const { data, error } =
-    await query(
-      supabase
-        .from(table)
-        .update(values),
-    ).select('*')
+  assertSupabaseConfigured()
+  if (!Object.keys(values).length) throw new Error('변경할 데이터가 없습니다.')
 
-  if (error) {
-    throw error
+  const { data, error } = await query(
+    supabase.from(table).update(values),
+  ).select('*')
+
+  if (error) throw error
+  const result = (data ?? []) as T[]
+  if (!result.length) {
+    throw new Error('변경된 데이터가 없습니다. 권한이 없거나 대상이 이미 삭제되었을 수 있습니다.')
   }
-
-  return (data ?? []) as T[]
+  return result
 }
 
 async function remove(
   table: TableName,
   query: (builder: any) => any,
 ): Promise<void> {
-  const { error } =
-    await query(
-      supabase.from(table).delete(),
-    )
+  assertSupabaseConfigured()
+  const { data, error } = await query(
+    supabase.from(table).delete(),
+  ).select('id')
 
-  if (error) {
-    throw error
+  if (error) throw error
+  if (!data?.length) {
+    throw new Error('삭제된 데이터가 없습니다. 권한이 없거나 대상이 이미 삭제되었을 수 있습니다.')
   }
+}
+
+function sanitizeExtension(fileName: string, fallback: string) {
+  const raw = fileName.includes('.') ? fileName.split('.').pop() : undefined
+  const extension = raw?.toLowerCase().replace(/[^a-z0-9]/g, '')
+  return extension && extension.length <= 10 ? extension : fallback
 }
 
 export const api = {
   async getContext(userId: string) {
+    assertSupabaseConfigured()
+    const id = assertId(userId, '사용자 ID')
     const [
       { data: profile, error: profileError },
       organizations,
@@ -167,7 +163,7 @@ export const api = {
         (query) =>
           query.eq(
             'user_id',
-            userId,
+            id,
           ),
       ),
 
@@ -262,8 +258,9 @@ export const api = {
   profiles: {
     visible: (
       organizationId: string,
-    ) =>
-      select<VisibleProfile>(
+    ) => {
+      void organizationId
+      return select<VisibleProfile>(
         'profiles',
         (query) =>
           query
@@ -274,9 +271,10 @@ export const api = {
             .order(
               'display_name',
             ),
-      ),
+      )
+    },
 
-    updateSelf: (
+    updateSelf: async (
       values: Partial<
         Pick<
           Profile,
@@ -286,16 +284,18 @@ export const api = {
           | 'phone'
         >
       >,
-    ) =>
-      update<Profile>(
+    ) => {
+      assertSupabaseConfigured()
+      const { data, error } = await supabase.auth.getUser()
+      if (error) throw error
+      const userId = data.user?.id
+      if (!userId) throw new Error('로그인 정보를 확인할 수 없습니다.')
+      return update<Profile>(
         'profiles',
         values,
-        (query) =>
-          query.eq(
-            'id',
-            values.id,
-          ),
-      ),
+        (query) => query.eq('id', userId),
+      )
+    },
   },
 
   memberships: {
@@ -1073,15 +1073,10 @@ export const api = {
       userId: string,
       file: File,
     ) => {
-      const ext =
-        file.name.includes('.')
-          ? file.name
-              .split('.')
-              .pop()
-              ?.toLowerCase()
-          : 'jpg'
-
-      const path = `profiles/${userId}/${crypto.randomUUID()}.${ext}`
+      assertSupabaseConfigured()
+      const id = assertId(userId, '사용자 ID')
+      const ext = sanitizeExtension(file.name, 'jpg')
+      const path = `profiles/${id}/${crypto.randomUUID()}.${ext}`
 
       const { error } =
         await supabase.storage
@@ -1128,15 +1123,10 @@ export const api = {
       organizationId: string,
       file: File,
     ) => {
-      const ext =
-        file.name.includes('.')
-          ? file.name
-              .split('.')
-              .pop()
-              ?.toLowerCase()
-          : 'bin'
-
-      const path = `media/${organizationId}/${crypto.randomUUID()}.${ext}`
+      assertSupabaseConfigured()
+      const id = assertId(organizationId, '조직 ID')
+      const ext = sanitizeExtension(file.name, 'bin')
+      const path = `media/${id}/${crypto.randomUUID()}.${ext}`
 
       const { error } =
         await supabase.storage
@@ -1171,12 +1161,15 @@ export const api = {
       path: string,
       expiresIn = 3600,
     ) => {
+      assertSupabaseConfigured()
+      if (!bucket.trim() || !path.trim()) throw new Error('파일 경로가 없습니다.')
+      const safeExpiresIn = Math.min(Math.max(Math.floor(expiresIn), 60), 86_400)
       const { data, error } =
         await supabase.storage
           .from(bucket)
           .createSignedUrl(
             path,
-            expiresIn,
+            safeExpiresIn,
           )
 
       if (error) {
