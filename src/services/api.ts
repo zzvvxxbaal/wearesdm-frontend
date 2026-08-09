@@ -1,7 +1,6 @@
-import { supabase, assertSupabaseConfigured } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import type {
   Announcement,
-  AnnouncementRead,
   AttendanceCorrectionRequest,
   AttendanceRecord,
   Event,
@@ -27,6 +26,7 @@ import type {
 } from '../types/media'
 
 type TableName =
+  | 'profiles'
   | 'organizations'
   | 'organization_memberships'
   | 'roles'
@@ -49,41 +49,45 @@ type TableName =
   | 'push_devices'
   | 'audit_logs'
 
-function assertId(value: string, label = 'ID') {
-  if (!value.trim()) throw new Error(`${label}가 없습니다.`)
-  return value.trim()
-}
-
 async function select<T>(
   table: TableName,
   query?: (builder: any) => any,
 ): Promise<T[]> {
-  assertSupabaseConfigured()
-  let builder = supabase.from(table).select('*')
-  if (query) builder = query(builder)
+  let builder = supabase
+    .from(table)
+    .select('*')
 
-  const { data, error } = await builder
-  if (error) throw error
+  if (query) {
+    builder = query(builder)
+  }
+
+  const { data, error } =
+    await builder
+
+  if (error) {
+    throw error
+  }
+
   return (data ?? []) as T[]
 }
 
 async function insert<T>(
   table: TableName,
-  payload: Record<string, unknown> | Record<string, unknown>[],
+  payload:
+    | Record<string, unknown>
+    | Record<string, unknown>[],
 ): Promise<T[]> {
-  assertSupabaseConfigured()
-  const rows = Array.isArray(payload) ? payload : [payload]
-  if (!rows.length) throw new Error('저장할 데이터가 없습니다.')
+  const { data, error } =
+    await supabase
+      .from(table)
+      .insert(payload)
+      .select('*')
 
-  const { data, error } = await supabase
-    .from(table)
-    .insert(payload)
-    .select('*')
+  if (error) {
+    throw error
+  }
 
-  if (error) throw error
-  const result = (data ?? []) as T[]
-  if (!result.length) throw new Error('데이터 저장 결과를 확인할 수 없습니다.')
-  return result
+  return (data ?? []) as T[]
 }
 
 async function update<T>(
@@ -91,46 +95,36 @@ async function update<T>(
   values: Record<string, unknown>,
   query: (builder: any) => any,
 ): Promise<T[]> {
-  assertSupabaseConfigured()
-  if (!Object.keys(values).length) throw new Error('변경할 데이터가 없습니다.')
+  const { data, error } =
+    await query(
+      supabase
+        .from(table)
+        .update(values),
+    ).select('*')
 
-  const { data, error } = await query(
-    supabase.from(table).update(values),
-  ).select('*')
-
-  if (error) throw error
-  const result = (data ?? []) as T[]
-  if (!result.length) {
-    throw new Error('변경된 데이터가 없습니다. 권한이 없거나 대상이 이미 삭제되었을 수 있습니다.')
+  if (error) {
+    throw error
   }
-  return result
+
+  return (data ?? []) as T[]
 }
 
 async function remove(
   table: TableName,
   query: (builder: any) => any,
 ): Promise<void> {
-  assertSupabaseConfigured()
-  const { data, error } = await query(
-    supabase.from(table).delete(),
-  ).select('id')
+  const { error } =
+    await query(
+      supabase.from(table).delete(),
+    )
 
-  if (error) throw error
-  if (!data?.length) {
-    throw new Error('삭제된 데이터가 없습니다. 권한이 없거나 대상이 이미 삭제되었을 수 있습니다.')
+  if (error) {
+    throw error
   }
-}
-
-function sanitizeExtension(fileName: string, fallback: string) {
-  const raw = fileName.includes('.') ? fileName.split('.').pop() : undefined
-  const extension = raw?.toLowerCase().replace(/[^a-z0-9]/g, '')
-  return extension && extension.length <= 10 ? extension : fallback
 }
 
 export const api = {
   async getContext(userId: string) {
-    assertSupabaseConfigured()
-    const id = assertId(userId, '사용자 ID')
     const [
       { data: profile, error: profileError },
       organizations,
@@ -163,7 +157,7 @@ export const api = {
         (query) =>
           query.eq(
             'user_id',
-            id,
+            userId,
           ),
       ),
 
@@ -256,23 +250,14 @@ export const api = {
   },
 
   profiles: {
-    visible: (
-      organizationId: string,
-    ) => {
-      void organizationId
-      return select<VisibleProfile>(
+    visible: (_organizationId?: string) =>
+      select<VisibleProfile>(
         'profiles',
         (query) =>
           query
-            .eq(
-              'status',
-              'active',
-            )
-            .order(
-              'display_name',
-            ),
-      )
-    },
+            .eq('status', 'active')
+            .order('display_name'),
+      ),
 
     updateSelf: async (
       values: Partial<
@@ -285,16 +270,16 @@ export const api = {
         >
       >,
     ) => {
-      assertSupabaseConfigured()
       const { data, error } = await supabase.auth.getUser()
       if (error) throw error
-      const userId = data.user?.id
-      if (!userId) throw new Error('로그인 정보를 확인할 수 없습니다.')
-      return update<Profile>(
+      if (!data.user) throw new Error('로그인이 필요합니다.')
+
+      const updated = await update<Profile>(
         'profiles',
         values,
-        (query) => query.eq('id', userId),
+        (query) => query.eq('id', data.user.id),
       )
+      return updated[0] ?? null
     },
   },
 
@@ -359,8 +344,30 @@ export const api = {
     list: () =>
       select<Role>(
         'roles',
-        (query) =>
-          query.order('name'),
+        (query) => query.order('name'),
+      ),
+
+    assignments: () =>
+      select<RoleAssignment>(
+        'role_assignments',
+        (query) => query.order('created_at', { ascending: false }),
+      ),
+
+    assign: (
+      values: Pick<
+        RoleAssignment,
+        'user_id' | 'role_id' | 'organization_id'
+      >,
+    ) =>
+      insert<RoleAssignment>(
+        'role_assignments',
+        values,
+      ),
+
+    remove: (id: string) =>
+      remove(
+        'role_assignments',
+        (query) => query.eq('id', id),
       ),
   },
 
@@ -487,6 +494,19 @@ export const api = {
       ),
   },
 
+  worship: {
+    list: (organizationId?: string) =>
+      api.worshipServices.list(organizationId),
+    create: (
+      values: Omit<WorshipService, 'id' | 'created_at' | 'updated_at'>,
+    ) => api.worshipServices.create(values),
+    update: (
+      id: string,
+      values: Partial<Omit<WorshipService, 'id' | 'created_at' | 'updated_at'>>,
+    ) => api.worshipServices.update(id, values),
+    delete: (id: string) => api.worshipServices.delete(id),
+  },
+
   events: {
     list: (
       organizationId?: string,
@@ -554,8 +574,34 @@ export const api = {
             id,
           ),
       ),
-  },
+    register: async (eventId: string) => {
+      const { data, error } = await supabase.auth.getUser()
+      if (error) throw error
+      if (!data.user) throw new Error('로그인이 필요합니다.')
+      return insert<EventParticipant>('event_participants', {
+        event_id: eventId,
+        user_id: data.user.id,
+      })
+    },
 
+    cancel: async (eventId: string) => {
+      const { data, error } = await supabase.auth.getUser()
+      if (error) throw error
+      if (!data.user) throw new Error('로그인이 필요합니다.')
+      return update<EventParticipant>(
+        'event_participants',
+        { cancelled_at: new Date().toISOString() },
+        (query) =>
+          query
+            .eq('event_id', eventId)
+            .eq('user_id', data.user.id)
+            .is('cancelled_at', null),
+      )
+    },
+
+    participants: (eventId: string) =>
+      api.participants.list(eventId),
+  },
   participants: {
     list: (
       eventId: string,
@@ -673,6 +719,115 @@ export const api = {
             id,
           ),
       ),
+
+
+    set: async (values: {
+      userId: string
+      status: AttendanceRecord['status']
+      eventId?: string
+      worshipServiceId?: string
+      note?: string | null
+    }) => {
+      const existing = await select<AttendanceRecord>(
+        'attendance_records',
+        (query) => {
+          let next = query.eq('user_id', values.userId)
+          next = values.eventId
+            ? next.eq('event_id', values.eventId)
+            : next.is('event_id', null)
+          next = values.worshipServiceId
+            ? next.eq('worship_service_id', values.worshipServiceId)
+            : next.is('worship_service_id', null)
+          return next.limit(1)
+        },
+      )
+
+      const currentUser = await supabase.auth.getUser()
+      if (currentUser.error) throw currentUser.error
+      if (!currentUser.data.user) throw new Error('로그인이 필요합니다.')
+
+      const processed = {
+        status: values.status,
+        note: values.note ?? null,
+        processed_by: currentUser.data.user.id,
+        processed_at: new Date().toISOString(),
+      }
+
+      if (existing[0]) {
+        return api.attendance.update(existing[0].id, processed)
+      }
+
+      return api.attendance.create({
+        user_id: values.userId,
+        event_id: values.eventId ?? null,
+        worship_service_id: values.worshipServiceId ?? null,
+        status: values.status,
+        processed_by: currentUser.data.user.id,
+        processed_at: new Date().toISOString(),
+        note: values.note ?? null,
+      })
+    },
+
+    requests: () => api.attendanceCorrections.list(),
+
+    requestCorrection: async (
+      attendanceRecordId: string,
+      requestedStatus: AttendanceRecord['status'],
+      reason: string,
+    ) => {
+      const { data, error } = await supabase.auth.getUser()
+      if (error) throw error
+      if (!data.user) throw new Error('로그인이 필요합니다.')
+
+      const records = await select<AttendanceRecord>(
+        'attendance_records',
+        (query) => query.eq('id', attendanceRecordId).limit(1),
+      )
+      const record = records[0]
+      if (!record) throw new Error('출석 기록을 찾을 수 없습니다.')
+
+      return api.attendanceCorrections.create({
+        attendance_record_id: attendanceRecordId,
+        requester_id: data.user.id,
+        original_status: record.status,
+        requested_status: requestedStatus,
+        reason,
+      })
+    },
+
+    reviewCorrection: async (
+      requestId: string,
+      status: Extract<AttendanceCorrectionRequest['status'], 'approved' | 'rejected'>,
+      reviewerNote?: string,
+    ) => {
+      const { data, error } = await supabase.auth.getUser()
+      if (error) throw error
+      if (!data.user) throw new Error('로그인이 필요합니다.')
+
+      const requests = await select<AttendanceCorrectionRequest>(
+        'attendance_correction_requests',
+        (query) => query.eq('id', requestId).limit(1),
+      )
+      const request = requests[0]
+      if (!request) throw new Error('출석 수정 요청을 찾을 수 없습니다.')
+
+      const updated = await api.attendanceCorrections.update(requestId, {
+        status,
+        reviewed_by: data.user.id,
+        reviewed_at: new Date().toISOString(),
+        reviewer_note: reviewerNote ?? null,
+      })
+
+      if (status === 'approved') {
+        await api.attendance.update(request.attendance_record_id, {
+          status: request.requested_status,
+          processed_by: data.user.id,
+          processed_at: new Date().toISOString(),
+        })
+      }
+
+      return updated
+    },
   },
 
   attendanceCorrections: {
@@ -1073,10 +1228,15 @@ export const api = {
       userId: string,
       file: File,
     ) => {
-      assertSupabaseConfigured()
-      const id = assertId(userId, '사용자 ID')
-      const ext = sanitizeExtension(file.name, 'jpg')
-      const path = `profiles/${id}/${crypto.randomUUID()}.${ext}`
+      const ext =
+        file.name.includes('.')
+          ? file.name
+              .split('.')
+              .pop()
+              ?.toLowerCase()
+          : 'jpg'
+
+      const path = `profiles/${userId}/${crypto.randomUUID()}.${ext}`
 
       const { error } =
         await supabase.storage
@@ -1123,10 +1283,15 @@ export const api = {
       organizationId: string,
       file: File,
     ) => {
-      assertSupabaseConfigured()
-      const id = assertId(organizationId, '조직 ID')
-      const ext = sanitizeExtension(file.name, 'bin')
-      const path = `media/${id}/${crypto.randomUUID()}.${ext}`
+      const ext =
+        file.name.includes('.')
+          ? file.name
+              .split('.')
+              .pop()
+              ?.toLowerCase()
+          : 'bin'
+
+      const path = `media/${organizationId}/${crypto.randomUUID()}.${ext}`
 
       const { error } =
         await supabase.storage
@@ -1161,15 +1326,12 @@ export const api = {
       path: string,
       expiresIn = 3600,
     ) => {
-      assertSupabaseConfigured()
-      if (!bucket.trim() || !path.trim()) throw new Error('파일 경로가 없습니다.')
-      const safeExpiresIn = Math.min(Math.max(Math.floor(expiresIn), 60), 86_400)
       const { data, error } =
         await supabase.storage
           .from(bucket)
           .createSignedUrl(
             path,
-            safeExpiresIn,
+            expiresIn,
           )
 
       if (error) {
